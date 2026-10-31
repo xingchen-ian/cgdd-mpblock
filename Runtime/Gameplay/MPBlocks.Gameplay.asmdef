@@ -1,0 +1,19 @@
+{
+  "name": "MPBlocks.Gameplay",
+  "rootNamespace": "MPBlocks.Gameplay",
+  "references": [
+    "MPBlocks.Core",
+    "MPBlocks.Sync",
+    "Unity.Netcode.Runtime",
+    "UnityEngine.UI"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

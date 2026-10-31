@@ -1,0 +1,27 @@
+{
+  "name": "com.cgdd.mpblocks",
+  "version": "0.3.0",
+  "displayName": "MPBlocks",
+  "description": "Composable multiplayer building blocks for LAN and exhibition games on Unity 2022.3. Built on Netcode for GameObjects. Provides session bootstrapping, authority-aware state sync, request/validate gameplay primitives, and in-game network diagnostics.",
+  "unity": "2022.3",
+  "keywords": [
+    "networking",
+    "multiplayer",
+    "netcode",
+    "lan",
+    "teaching"
+  ],
+  "author": {
+    "name": "CGDD",
+    "email": "cgdd@example.edu"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xingchen-ian/cgdd-mpblock.git"
+  },
+  "dependencies": {
+    "com.unity.netcode.gameobjects": "1.15.1",
+    "com.unity.ugui": "1.0.0"
+  },
+  "samples": []
+}

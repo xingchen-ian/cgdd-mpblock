@@ -1,0 +1,25 @@
+{
+  "name": "MPBlocks.Editor",
+  "rootNamespace": "MPBlocks.Editor",
+  "references": [
+    "MPBlocks.Core",
+    "MPBlocks.Sync",
+    "MPBlocks.Gameplay",
+    "MPBlocks.Diagnostics",
+    "Unity.Netcode.Runtime",
+    "Unity.Netcode.Transports.UTP",
+    "Unity.Netcode.Components",
+    "UnityEngine.UI"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

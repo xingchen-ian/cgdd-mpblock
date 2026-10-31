@@ -1,0 +1,38 @@
+# This repository is a Unity UPM package (com.cgdd.mpblocks), not a Unity project.
+# It must keep its .meta files: they carry the GUIDs that scenes/prefabs reference.
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vs/
+.idea/
+.vscode/
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# If the package folder is ever opened as a Unity project
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+[Rr]ecordings/
+
+# Generated locally
+out/
+*.unitypackage
