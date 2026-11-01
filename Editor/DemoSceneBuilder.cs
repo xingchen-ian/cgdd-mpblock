@@ -32,6 +32,10 @@ namespace MPBlocks.Editor
 
             var crate = EnsureCratePrefab(config);
             BuildSpawner(crate);
+            BuildPhone();
+            BuildRoleManager();
+            BuildTeamManager();
+            BuildSeerOnlyProp();
 
             Debug.Log("[MP] INFO SETUP_DEMO_BUILT");
         }
@@ -153,6 +157,92 @@ namespace MPBlocks.Editor
         /// The thing the Spawner produces: a plain networked cube. Groups replace the prefab
         /// with whatever their game spawns.
         /// </summary>
+        /// <summary>
+        /// The pickup demo: one "phone" that changes owner. Ownership transfer is the
+        /// capability the other blocks cannot express.
+        /// </summary>
+        /// <summary>Hands out private roles to players; rotates them when asked.</summary>
+        /// <summary>Splits players into public teams.</summary>
+        /// <summary>
+        /// An asymmetric-prop demo: a glowing marker that only the player with role 1 can see.
+        /// It is a plain child visual, never a NetworkObject.
+        /// </summary>
+        private static void BuildSeerOnlyProp()
+        {
+            var root = new GameObject("SeerMarker");
+            root.transform.position = new Vector3(0f, 1.2f, -2.2f);
+
+            var body = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            body.name = "Body";
+            body.transform.SetParent(root.transform, false);
+            body.transform.localScale = new Vector3(0.45f, 0.45f, 0.45f);
+
+            var collider = body.GetComponent<Collider>();
+            if (collider != null) Object.DestroyImmediate(collider);
+
+            var renderer = body.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.sharedMaterial.color = new Color(0.95f, 0.35f, 0.85f);
+            }
+
+            var show = root.AddComponent<ShowForRole>();
+            Set(show, "label", "seer-marker");
+            var so = new SerializedObject(show);
+            var prop = so.FindProperty("visibleForRoles");
+            if (prop != null)
+            {
+                prop.arraySize = 1;
+                prop.GetArrayElementAtIndex(0).intValue = 1;
+                so.ApplyModifiedPropertiesWithoutUndo();
+            }
+        }
+
+        private static void BuildTeamManager()
+        {
+            var root = new GameObject("TeamManager");
+            root.transform.position = new Vector3(0f, 0f, -9f);
+            root.AddComponent<NetworkObject>();
+            root.AddComponent<TeamManager>();
+        }
+
+        private static void BuildRoleManager()
+        {
+            var root = new GameObject("RoleManager");
+            root.transform.position = new Vector3(0f, 0f, -6f);
+            root.AddComponent<NetworkObject>();
+            root.AddComponent<RoleManager>();
+        }
+
+        private static void BuildPhone()
+        {
+            var root = new GameObject("Phone");
+            root.transform.position = new Vector3(0f, 0.2f, 1.4f);
+            root.AddComponent<NetworkObject>();
+
+            var synced = root.AddComponent<SyncedTransform>();
+            Set(synced, "label", "phone");
+
+            var interactable = root.AddComponent<Interactable>();
+            Set(interactable, "label", "Phone");
+            Set(interactable, "maxDistance", 4f);
+
+            var pickable = root.AddComponent<Pickable>();
+            Set(pickable, "label", "phone");
+            Set(pickable, "requestInteractable", interactable);
+
+            var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            body.name = "Body";
+            body.transform.SetParent(root.transform, false);
+            body.transform.localScale = new Vector3(0.35f, 0.12f, 0.65f);
+
+            var renderer = body.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.sharedMaterial.color = new Color(0.25f, 0.45f, 0.85f);
+            }
+        }
+
         private static GameObject EnsureCratePrefab(NetConfig config)
         {
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(CratePrefabPath);

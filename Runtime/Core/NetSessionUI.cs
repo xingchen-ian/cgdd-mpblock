@@ -30,6 +30,8 @@ namespace MPBlocks.Core
         [Tooltip("Shows why a connection was refused, for example server full or wrong game. Wired by the scene generator, so manual dragging is normally unnecessary.")]
         [SerializeField] private Text reasonText;
         [Tooltip("Server IP typed in before joining; when empty the NetConfig defaultAddress is used. Wired by the scene generator, so manual dragging is normally unnecessary.")]
+        [SerializeField] private InputField nameInput;
+
         [SerializeField] private InputField addressInput;
         [Tooltip("Calls NetBootstrap.StartServer() to host or start a dedicated server, and greys out while a session is running. Wired by the scene generator, so manual dragging is normally unnecessary.")]
         [SerializeField] private Button hostButton;
@@ -55,6 +57,12 @@ namespace MPBlocks.Core
             Wire(hostButton, Host);
             Wire(joinButton, Join);
             Wire(leaveButton, Leave);
+
+            // Show the name saved on this machine, so nobody retypes it every session.
+            if (nameInput != null && string.IsNullOrEmpty(nameInput.text))
+            {
+                nameInput.text = LocalPlayerName.Get();
+            }
         }
 
         private static void Wire(Button button, UnityEngine.Events.UnityAction action)
@@ -79,6 +87,7 @@ namespace MPBlocks.Core
                 return;
             }
 
+            RememberName();
             ClearReason();
             bootstrap.StartServer();
         }
@@ -92,6 +101,7 @@ namespace MPBlocks.Core
             }
 
             var address = Address;
+            RememberName();
             ClearReason();
             bootstrap.StartClient(address);
         }
@@ -103,6 +113,20 @@ namespace MPBlocks.Core
 
             MPLog.Info("SESSION_LEAVE");
             manager.Shutdown();
+        }
+
+        /// <summary>The name typed on this screen, saved so it survives a restart.</summary>
+        public string PlayerName => nameInput != null ? LocalPlayerName.Sanitize(nameInput.text) : LocalPlayerName.Get();
+
+        private void RememberName()
+        {
+            if (nameInput == null) return;
+
+            var typed = LocalPlayerName.Sanitize(nameInput.text);
+            if (string.IsNullOrEmpty(typed)) return;
+
+            LocalPlayerName.Set(typed);
+            MPLog.Info("NAME_REMEMBERED", ("name", typed));
         }
 
         public string Address =>

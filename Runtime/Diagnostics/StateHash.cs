@@ -24,14 +24,35 @@ namespace MPBlocks.Diagnostics
         [Tooltip("Seconds between world-state hash comparisons. 2 s is frequent enough to catch drift without flooding the log; smaller is more sensitive but writes more [MP] lines.")]
         [SerializeField] private float interval = 2f;
 
+        [Tooltip("Also hash the set of spawned object ids. Leave OFF when a Spawner runs: " +
+                 "objects appear between a client's sample and the server's, which looks like " +
+                 "a mismatch even though nothing is wrong.")]
+        [SerializeField] private bool includeObjectIds;
+
+        [Tooltip("How many recent server hashes a client hash may match. State changes take a " +
+                 "moment to propagate, so a client is normally a sample behind.")]
+        [SerializeField] private int matchWindow = 6;
+
+        [Tooltip("Seconds to wait after spawn before comparing. Players are still receiving the " +
+                 "initial object set during this window and would otherwise report noise.")]
+        [SerializeField] private float warmupSeconds = 6f;
+
         private float _timer;
+        private float _spawnTime;
+        private readonly System.Collections.Generic.List<int> _recentServerHashes = new System.Collections.Generic.List<int>();
         private readonly List<ulong> _ids = new List<ulong>();
         private readonly List<int> _contributions = new List<int>();
+
+        public override void OnNetworkSpawn()
+        {
+            _spawnTime = Time.time;
+        }
 
         private void Update()
         {
             // One reporter per machine: only the local owner of this object acts.
             if (!IsSpawned || !IsOwner) return;
+            if (Time.time - _spawnTime < warmupSeconds) return;
 
             _timer += Time.deltaTime;
             if (_timer < interval) return;
@@ -41,6 +62,9 @@ namespace MPBlocks.Diagnostics
 
             if (IsServer)
             {
+                _recentServerHashes.Add(hash);
+                while (_recentServerHashes.Count > Mathf.Max(1, matchWindow)) _recentServerHashes.RemoveAt(0);
+
                 MPLog.Info("STATE_HASH_SELF", ("hash", hash));
             }
             else
@@ -55,9 +79,14 @@ namespace MPBlocks.Diagnostics
             int serverHash = ComputeHash();
             ulong sender = rpcParams.Receive.SenderClientId;
 
-            if (clientHash == serverHash)
+            // A client is normally one sample behind the server, so accept a match against
+            // any hash the server produced recently. Without this, every state change looks
+            // like divergence.
+            bool matched = clientHash == serverHash || _recentServerHashes.Contains(clientHash);
+
+            if (matched)
             {
-                MPLog.Info(MPEvent.StateHashMatch, ("clientId", sender), ("hash", serverHash));
+                MPLog.Info(MPEvent.StateHashMatch, ("clientId", sender), ("hash", clientHash));
             }
             else
             {
@@ -99,10 +128,13 @@ namespace MPBlocks.Diagnostics
                 uint hash = 2166136261u;
                 hash = Mix(hash, manager.ConnectedClientsIds.Count);
 
-                foreach (var id in _ids)
+                if (includeObjectIds)
                 {
-                    hash = Mix(hash, (int)(id & 0xFFFFFFFF));
-                    hash = Mix(hash, (int)((id >> 32) & 0xFFFFFFFF));
+                    foreach (var id in _ids)
+                    {
+                        hash = Mix(hash, (int)(id & 0xFFFFFFFF));
+                        hash = Mix(hash, (int)((id >> 32) & 0xFFFFFFFF));
+                    }
                 }
 
                 foreach (var value in _contributions)

@@ -39,6 +39,8 @@ namespace MPBlocks.Editor
             var status = MakeText(panel, "Status", "Not connected", 18, FontStyle.Normal, Color.white);
             var players = MakeText(panel, "Players", string.Empty, 16, FontStyle.Normal, new Color(0.85f, 0.85f, 0.85f));
 
+            var nameInput = MakeInputField(panel, "NameInput", "Your name");
+
             var joinRow = new GameObject("JoinRow", typeof(RectTransform), typeof(HorizontalLayoutGroup));
             joinRow.transform.SetParent(panel, false);
             var rowLayout = joinRow.GetComponent<HorizontalLayoutGroup>();
@@ -63,6 +65,7 @@ namespace MPBlocks.Editor
             Assign(so, "statusText", status);
             Assign(so, "playerListText", players);
             Assign(so, "reasonText", reason);
+            Assign(so, "nameInput", nameInput);
             Assign(so, "addressInput", address);
             Assign(so, "hostButton", hostButton);
             Assign(so, "joinButton", joinButton);
@@ -219,6 +222,10 @@ namespace MPBlocks.Editor
 
             return button;
         }
+
+        /// <summary>Public wrapper so the upgrader can add a field to an existing scene.</summary>
+        public static InputField CreateInputField(Transform parent, string name, string placeholderText)
+            => MakeInputField(parent, name, placeholderText);
 
         private static InputField MakeInputField(Transform parent, string name, string placeholderText)
         {

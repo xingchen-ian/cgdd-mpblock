@@ -24,7 +24,7 @@ namespace MPBlocks.Editor
     public static class ProjectSetup
     {
         /// <summary>Bump when the generated scene layout changes.</summary>
-        public const int SetupVersion = 14;
+        public const int SetupVersion = 15;
 
         public const string SettingsFolder = "Assets/Settings";
         public const string ScenesFolder = "Assets/Scenes";
@@ -47,6 +47,11 @@ namespace MPBlocks.Editor
         public static void RefreshFromMenu()
         {
             Setup(force: false);
+
+            // Also fill in UI fields that were added to the session panel after this scene
+            // was generated (the name field). Additive only — no scene is rebuilt.
+            SessionUIUpgrader.TryUpgradeActiveScene();
+
             AssetDatabase.SaveAssets();
             Debug.Log("[MP] INFO SETUP_REFRESHED");
         }
@@ -91,7 +96,9 @@ namespace MPBlocks.Editor
 
             var needsScene = force || !File.Exists(ScenePath) || !SceneHasNetworkManager()
                             || !SceneHasSessionUI() || !SceneHasScoreboardHUD() || !SceneHasDemoContent()
-                            || !SceneHasSpawner() || !SceneHasLatencySimulator() || !SceneHasNetDiag();
+                            || !SceneHasSpawner() || !SceneHasLatencySimulator() || !SceneHasNetDiag()
+                            || !SceneHasPhone() || !SceneHasRoleManager() || !SceneHasTeamManager()
+                            || !SceneHasSeerMarker() || !SceneHasNameInput();
             if (needsScene)
             {
                 BuildScene(config);
@@ -150,7 +157,13 @@ namespace MPBlocks.Editor
                                     || existing.GetComponent<Health>() == null
                                     || existing.GetComponent<HealthHUD>() == null
                                     || existing.GetComponent<PlayerInteractor>() == null
-                                    || existing.GetComponent<PlayerAppearance>() == null;
+                                    || existing.GetComponent<PlayerAppearance>() == null
+                                    || existing.GetComponent<PlayerPrivateState>() == null
+                                    || existing.GetComponent<SyncedString>() == null
+                                    || existing.GetComponent<Team>() == null
+                                    || existing.GetComponent<PlayerNameTag>() == null
+                                    || existing.GetComponent<TargetedNetEvent>() == null
+                                    || existing.transform.Find("HoldPoint") == null;
 
                 if (needsUpgrade)
                 {
@@ -159,6 +172,7 @@ namespace MPBlocks.Editor
                     if (contents.GetComponent<Health>() == null) contents.AddComponent<Health>();
                     if (contents.GetComponent<HealthHUD>() == null) contents.AddComponent<HealthHUD>();
                     if (contents.GetComponent<PlayerInteractor>() == null) contents.AddComponent<PlayerInteractor>();
+                    EnsurePlayerExtras(contents);
                     if (contents.GetComponent<PlayerAppearance>() == null) contents.AddComponent<PlayerAppearance>();
                     PrefabUtility.SaveAsPrefabAsset(contents, PlayerPrefabPath);
                     PrefabUtility.UnloadPrefabContents(contents);
@@ -178,6 +192,7 @@ namespace MPBlocks.Editor
             root.AddComponent<Health>();
             root.AddComponent<HealthHUD>();
             root.AddComponent<PlayerInteractor>();
+            EnsurePlayerExtras(root);
             root.AddComponent<PlayerAppearance>();
             var mover = root.AddComponent<SimplePlayerMover>();
 
@@ -275,6 +290,7 @@ namespace MPBlocks.Editor
             root.AddComponent<Health>();
             root.AddComponent<HealthHUD>();
             root.AddComponent<PlayerInteractor>();
+            EnsurePlayerExtras(root);
             root.AddComponent<PlayerAppearance>();
 
             var body = root.AddComponent<Rigidbody>();
@@ -343,6 +359,56 @@ namespace MPBlocks.Editor
                 prop.objectReferenceValue = prefab;
                 so.ApplyModifiedPropertiesWithoutUndo();
                 EditorUtility.SetDirty(config);
+            }
+        }
+
+        /// <summary>
+        /// Adds the two things a player prefab needs beyond the basics: a HoldPoint child
+        /// (so Pickable has somewhere to attach) and the TargetedNetEvent used for
+        /// private information.
+        /// </summary>
+        private static void EnsurePlayerExtras(GameObject root)
+        {
+            if (root.GetComponent<TargetedNetEvent>() == null)
+            {
+                root.AddComponent<TargetedNetEvent>();
+            }
+
+            if (root.GetComponent<PlayerPrivateState>() == null)
+            {
+                root.AddComponent<PlayerPrivateState>();
+            }
+
+            var syncedName = root.GetComponent<SyncedString>();
+            if (syncedName == null)
+            {
+                syncedName = root.AddComponent<SyncedString>();
+            }
+
+            if (root.GetComponent<Team>() == null)
+            {
+                root.AddComponent<Team>();
+            }
+
+            var nameTag = root.GetComponent<PlayerNameTag>();
+            if (nameTag == null)
+            {
+                nameTag = root.AddComponent<PlayerNameTag>();
+            }
+
+            var nameSo = new SerializedObject(nameTag);
+            var nameProp = nameSo.FindProperty("syncedName");
+            if (nameProp != null && nameProp.objectReferenceValue == null)
+            {
+                nameProp.objectReferenceValue = syncedName;
+                nameSo.ApplyModifiedPropertiesWithoutUndo();
+            }
+
+            if (root.transform.Find("HoldPoint") == null)
+            {
+                var hold = new GameObject("HoldPoint");
+                hold.transform.SetParent(root.transform, false);
+                hold.transform.localPosition = new Vector3(0f, 1.2f, 0.6f);
             }
         }
 
@@ -433,6 +499,36 @@ namespace MPBlocks.Editor
             if (string.IsNullOrEmpty(guid)) return false;
 
             return File.ReadAllText(ScenePath).Contains("guid: " + guid);
+        }
+
+        private static bool SceneHasNameInput()
+        {
+            if (!File.Exists(ScenePath)) return false;
+            return File.ReadAllText(ScenePath).Contains("NameInput");
+        }
+
+        private static bool SceneHasSeerMarker()
+        {
+            if (!File.Exists(ScenePath)) return false;
+            return File.ReadAllText(ScenePath).Contains("SeerMarker");
+        }
+
+        private static bool SceneHasTeamManager()
+        {
+            if (!File.Exists(ScenePath)) return false;
+            return File.ReadAllText(ScenePath).Contains("TeamManager");
+        }
+
+        private static bool SceneHasRoleManager()
+        {
+            if (!File.Exists(ScenePath)) return false;
+            return File.ReadAllText(ScenePath).Contains("RoleManager");
+        }
+
+        private static bool SceneHasPhone()
+        {
+            if (!File.Exists(ScenePath)) return false;
+            return File.ReadAllText(ScenePath).Contains("Phone");
         }
 
         private static bool SceneHasNetDiag()
