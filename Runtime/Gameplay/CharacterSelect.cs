@@ -32,6 +32,9 @@ namespace MPBlocks.Gameplay
         [Tooltip("Show the selection panel to players. Turn off for a dedicated server or for automation-only runs.")]
         [SerializeField] private bool showPanel = true;
 
+        [Tooltip("Hide the panel entirely once the choice is confirmed. Off shows 'Playing as X' instead.")]
+        [SerializeField] private bool hidePanelWhenLocked;
+
         [Tooltip("Shown in [MP] log lines.")]
         [SerializeField] private string label = "character-select";
 
@@ -162,14 +165,32 @@ namespace MPBlocks.Gameplay
             }
         }
 
+        /// <summary>Client asks to preview a character. Refused once the choice is confirmed.</summary>
+        public void RequestSelect(int index)
+        {
+            if (!IsSpawned) return;
+
+            if (IsServer)
+            {
+                HandleSelect(NetworkManager.LocalClientId, index);
+                return;
+            }
+
+            RequestSelectServerRpc(index);
+        }
+
         [ServerRpc(RequireOwnership = false)]
         private void RequestSelectServerRpc(int index, ServerRpcParams rpcParams = default)
+        {
+            HandleSelect(rpcParams.Receive.SenderClientId, index);
+        }
+
+        private void HandleSelect(ulong clientId, int index)
         {
             if (!IsServer) return;
             if (_resolvedRoster == null || _resolvedRoster.Count == 0) return;
 
             int clamped = Mathf.Clamp(index, 0, _resolvedRoster.Count - 1);
-            ulong clientId = rpcParams.Receive.SenderClientId;
 
             if (!NetworkManager.ConnectedClients.TryGetValue(clientId, out var client) || client.PlayerObject == null)
             {
@@ -181,6 +202,12 @@ namespace MPBlocks.Gameplay
             if (appearance == null)
             {
                 MPLog.Warn("CHARACTER_SELECT_DENIED", ("label", label), ("clientId", clientId), ("reason", "no PlayerAppearance"));
+                return;
+            }
+
+            if (appearance.IsLocked)
+            {
+                MPLog.Info("CHARACTER_SELECT_DENIED", ("label", label), ("clientId", clientId), ("index", clamped), ("reason", "locked"));
                 return;
             }
 
@@ -207,6 +234,47 @@ namespace MPBlocks.Gameplay
                 ("character", definition != null ? definition.DisplayName : clamped.ToString()));
         }
 
+        /// <summary>Client asks to lock in the current choice. One way — there is no unlock.</summary>
+        public void ConfirmSelection()
+        {
+            if (!IsSpawned) return;
+
+            if (IsServer)
+            {
+                HandleConfirm(NetworkManager.LocalClientId);
+                return;
+            }
+
+            ConfirmServerRpc();
+        }
+
+        [ServerRpc(RequireOwnership = false)]
+        private void ConfirmServerRpc(ServerRpcParams rpcParams = default)
+        {
+            HandleConfirm(rpcParams.Receive.SenderClientId);
+        }
+
+        private void HandleConfirm(ulong clientId)
+        {
+            if (!IsServer) return;
+
+            if (!NetworkManager.ConnectedClients.TryGetValue(clientId, out var client) || client.PlayerObject == null)
+            {
+                MPLog.Warn("CHARACTER_CONFIRM_DENIED", ("label", label), ("clientId", clientId), ("reason", "no player object"));
+                return;
+            }
+
+            var appearance = client.PlayerObject.GetComponent<PlayerAppearance>();
+            if (appearance == null)
+            {
+                MPLog.Warn("CHARACTER_CONFIRM_DENIED", ("label", label), ("clientId", clientId), ("reason", "no PlayerAppearance"));
+                return;
+            }
+
+            appearance.SetLockedServer(true);
+            MPLog.Info("CHARACTER_CONFIRMED", ("label", label), ("clientId", clientId), ("index", appearance.CharacterIndex));
+        }
+
         private int FindFreeSlot()
         {
             for (int i = 0; i < _ownerBySlot.Count; i++)
@@ -230,6 +298,56 @@ namespace MPBlocks.Gameplay
             return owner != -1 && owner != (int)clientId;
         }
 
+        private bool _demoStarted;
+
+        private void Update()
+        {
+            if (_demoStarted || !IsSpawned) return;
+            if (!HasArgument("-mp-character-demo")) return;
+
+            var manager = NetworkManager.Singleton;
+            if (manager == null || manager.LocalClient == null || manager.LocalClient.PlayerObject == null) return;
+
+            _demoStarted = true;
+            StartCoroutine(CharacterDemo());
+        }
+
+        /// <summary>
+        /// Test hook: pick, confirm, then try to change again. The last step must be refused,
+        /// which is what proves the confirm actually locks the choice.
+        /// </summary>
+        private System.Collections.IEnumerator CharacterDemo()
+        {
+            yield return new WaitForSeconds(2f);
+
+            RequestSelect(0);
+            yield return new WaitForSeconds(0.8f);
+
+            ConfirmSelection();
+            yield return new WaitForSeconds(0.8f);
+
+            RequestSelect(1);
+
+            MPLog.Info("CHARACTER_DEMO_DONE");
+        }
+
+        private static bool HasArgument(string name)
+        {
+            try
+            {
+                foreach (var arg in System.Environment.GetCommandLineArgs())
+                {
+                    if (arg == name) return true;
+                }
+            }
+            catch
+            {
+                // ignored
+            }
+
+            return false;
+        }
+
         private void OnGUI()
         {
             if (!showPanel || !IsSpawned) return;
@@ -243,8 +361,21 @@ namespace MPBlocks.Gameplay
             var appearance = player.GetComponent<PlayerAppearance>();
             if (appearance == null) return;
 
+            var currentDefinitionName = _resolvedRoster.Get(appearance.CharacterIndex) != null
+                ? _resolvedRoster.Get(appearance.CharacterIndex).DisplayName
+                : appearance.CharacterIndex.ToString();
+
+            if (appearance.IsLocked)
+            {
+                if (hidePanelWhenLocked) return;
+
+                var lockedRect = new Rect(Screen.width - 320f, 20f, 300f, 52f);
+                GUI.Box(lockedRect, "Playing as " + currentDefinitionName + "  (locked)");
+                return;
+            }
+
             const float width = 300f;
-            float height = 70f + _resolvedRoster.Count * 30f;
+            float height = 104f + _resolvedRoster.Count * 30f;
             var rect = new Rect(Screen.width - width - 20f, 20f, width, height);
 
             GUI.Box(rect, "Choose your character");
@@ -263,7 +394,7 @@ namespace MPBlocks.Gameplay
                     string text = (mine ? "● " : string.Empty) + display + (taken ? "  (taken)" : string.Empty);
                     if (GUILayout.Button(text, GUILayout.Height(26f)))
                     {
-                        RequestSelectServerRpc(i);
+                        RequestSelect(i);
                     }
                 }
             }
@@ -271,6 +402,17 @@ namespace MPBlocks.Gameplay
             var currentDefinition = _resolvedRoster.Get(current);
             GUILayout.Label("You: " + (currentDefinition != null ? currentDefinition.DisplayName : current.ToString()));
             GUILayout.Label("Claimed: " + ClaimedCount() + " / " + _resolvedRoster.Count);
+
+            GUILayout.Space(4f);
+            using (new GuiEnabledScope(current >= 0))
+            {
+                if (GUILayout.Button("Confirm", GUILayout.Height(28f)))
+                {
+                    ConfirmSelection();
+                }
+            }
+
+            GUILayout.Label("Picking is free until you confirm.");
 
             GUILayout.EndArea();
         }

@@ -36,6 +36,7 @@ namespace MPBlocks.Editor
             BuildRoleManager();
             BuildTeamManager();
             BuildSeerOnlyProp();
+            CharacterSelectSetup.Apply(config);
 
             Debug.Log("[MP] INFO SETUP_DEMO_BUILT");
         }

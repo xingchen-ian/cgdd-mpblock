@@ -32,12 +32,18 @@ namespace MPBlocks.Gameplay
         private readonly NetworkVariable<int> _character = new NetworkVariable<int>(
             0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+        private readonly NetworkVariable<bool> _locked = new NetworkVariable<bool>(
+            false, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
+
         private CharacterRoster _roster;
         private GameObject _visualInstance;
         private MaterialPropertyBlock _block;
 
         /// <summary>Currently applied character index (replicated).</summary>
         public int CharacterIndex => _character.Value;
+
+        /// <summary>True once this player confirmed their character; further changes are refused.</summary>
+        public bool IsLocked => _locked.Value;
 
         /// <summary>The visual prefab instance for the current character, or null when the character only tints the body.</summary>
         public GameObject VisualInstance => _visualInstance;
@@ -104,6 +110,21 @@ namespace MPBlocks.Gameplay
 
             int index = (int)(OwnerClientId % (ulong)_roster.Count);
             SetCharacterServer(index);
+        }
+
+        /// <summary>Server only. Freezes this player's character choice.</summary>
+        public void SetLockedServer(bool value)
+        {
+            if (!IsServer)
+            {
+                MPLog.Warn(MPEvent.AuthViolation, ("block", "PlayerAppearance"), ("label", label), ("caller", "client"));
+                return;
+            }
+
+            if (_locked.Value == value) return;
+
+            _locked.Value = value;
+            MPLog.Info("CHARACTER_LOCKED", ("label", label), ("clientId", OwnerClientId), ("locked", value));
         }
 
         /// <summary>Server only. Selects the character index applied to this player.</summary>

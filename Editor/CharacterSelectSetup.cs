@@ -36,7 +36,16 @@ namespace MPBlocks.Editor
                 return;
             }
 
-            var config = bootstrap.Config;
+            Apply(bootstrap.Config);
+        }
+
+        /// <summary>
+        /// Dialog-free version, safe to call from scene generation and from batch builds.
+        /// </summary>
+        public static void Apply(NetConfig config)
+        {
+            if (config == null) return;
+
             var roster = EnsureRoster(config);
             AssignConfigRoster(config, roster);
 
