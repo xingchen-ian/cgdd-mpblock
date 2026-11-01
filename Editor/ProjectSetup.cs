@@ -24,7 +24,7 @@ namespace MPBlocks.Editor
     public static class ProjectSetup
     {
         /// <summary>Bump when the generated scene layout changes.</summary>
-        public const int SetupVersion = 13;
+        public const int SetupVersion = 14;
 
         public const string SettingsFolder = "Assets/Settings";
         public const string ScenesFolder = "Assets/Scenes";
@@ -149,7 +149,8 @@ namespace MPBlocks.Editor
                 bool needsUpgrade = existing.GetComponent<StateHash>() == null
                                     || existing.GetComponent<Health>() == null
                                     || existing.GetComponent<HealthHUD>() == null
-                                    || existing.GetComponent<PlayerInteractor>() == null;
+                                    || existing.GetComponent<PlayerInteractor>() == null
+                                    || existing.GetComponent<PlayerAppearance>() == null;
 
                 if (needsUpgrade)
                 {
@@ -158,6 +159,7 @@ namespace MPBlocks.Editor
                     if (contents.GetComponent<Health>() == null) contents.AddComponent<Health>();
                     if (contents.GetComponent<HealthHUD>() == null) contents.AddComponent<HealthHUD>();
                     if (contents.GetComponent<PlayerInteractor>() == null) contents.AddComponent<PlayerInteractor>();
+                    if (contents.GetComponent<PlayerAppearance>() == null) contents.AddComponent<PlayerAppearance>();
                     PrefabUtility.SaveAsPrefabAsset(contents, PlayerPrefabPath);
                     PrefabUtility.UnloadPrefabContents(contents);
                     Debug.Log("[MP] INFO SETUP_PLAYER_PREFAB_UPGRADED path=" + PlayerPrefabPath);
@@ -176,6 +178,7 @@ namespace MPBlocks.Editor
             root.AddComponent<Health>();
             root.AddComponent<HealthHUD>();
             root.AddComponent<PlayerInteractor>();
+            root.AddComponent<PlayerAppearance>();
             var mover = root.AddComponent<SimplePlayerMover>();
 
             var body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
@@ -228,6 +231,7 @@ namespace MPBlocks.Editor
                                     || existing.GetComponent<Health>() == null
                                     || existing.GetComponent<HealthHUD>() == null
                                     || existing.GetComponent<PlayerInteractor>() == null
+                                    || existing.GetComponent<PlayerAppearance>() == null
                                     || existing.GetComponent<Rigidbody>().constraints != RigidbodyConstraints.FreezeRotation;
 
                 if (!needsUpgrade)
@@ -241,6 +245,7 @@ namespace MPBlocks.Editor
                 if (contents.GetComponent<Health>() == null) contents.AddComponent<Health>();
                 if (contents.GetComponent<HealthHUD>() == null) contents.AddComponent<HealthHUD>();
                 if (contents.GetComponent<PlayerInteractor>() == null) contents.AddComponent<PlayerInteractor>();
+                if (contents.GetComponent<PlayerAppearance>() == null) contents.AddComponent<PlayerAppearance>();
 
                 var contentBody = contents.GetComponent<Rigidbody>();
                 if (contentBody == null) contentBody = contents.AddComponent<Rigidbody>();
@@ -270,6 +275,7 @@ namespace MPBlocks.Editor
             root.AddComponent<Health>();
             root.AddComponent<HealthHUD>();
             root.AddComponent<PlayerInteractor>();
+            root.AddComponent<PlayerAppearance>();
 
             var body = root.AddComponent<Rigidbody>();
             ConfigureRigidbody(body);

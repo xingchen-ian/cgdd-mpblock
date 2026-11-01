@@ -66,6 +66,9 @@ namespace MPBlocks.Core
         [Tooltip("Which player prefab is used: Transform = SimplePlayerMover (no gravity/physics), Rigidbody = RigidbodyPlayerMover (gravity, jump, collisions). Switching only changes what is spawned; the scene itself does not change. If Rigidbody is selected but its prefab is empty, the Transform prefab is used instead.")]
         [SerializeField] private MPPlayerMovement playerMovement = MPPlayerMovement.Transform;
 
+        [Tooltip("Optional character roster. When assigned (and a CharacterSelect object is in the scene), players pick one character at session start; the choice is server-authoritative and replicated to late joiners. Leave empty to disable character selection.")]
+        [SerializeField] private CharacterRoster characterRoster;
+
         [Tooltip("Scoreboard prefab the server spawns when the session starts; leave empty for games without a scoreboard. If set, it must contain a NetworkObject or [MP] logs ConfigError.")]
         [SerializeField] private GameObject scoreboardPrefab;
 
@@ -98,6 +101,9 @@ namespace MPBlocks.Core
         /// <summary>Which movement sample the game uses.</summary>
         public MPPlayerMovement PlayerMovement => playerMovement;
 
+        /// <summary>Characters players can choose from, or null when selection is disabled.</summary>
+        public CharacterRoster CharacterRoster => characterRoster;
+
         public string GameId => gameId;
         public GameObject ScoreboardPrefab => scoreboardPrefab;
         public GameObject[] SpawnablePrefabs => spawnablePrefabs;
@@ -117,6 +123,9 @@ namespace MPBlocks.Core
 
         /// <summary>Selects which player prefab is spawned. Safe to call before or after the prefabs are assigned.</summary>
         public void SetPlayerMovement(MPPlayerMovement value) => playerMovement = value;
+
+        /// <summary>Assigns the optional character roster used by character selection.</summary>
+        public void SetCharacterRoster(CharacterRoster value) => characterRoster = value;
         public void SetGameId(string value) => gameId = value;
         public void SetScoreboardPrefab(GameObject value) => scoreboardPrefab = value;
         public void SetSpawnablePrefabs(params GameObject[] value) => spawnablePrefabs = value ?? System.Array.Empty<GameObject>();
