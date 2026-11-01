@@ -8,6 +8,7 @@ using Unity.Netcode.Transports.UTP;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace MPBlocks.Editor
 {
@@ -162,6 +163,7 @@ namespace MPBlocks.Editor
                                     || existing.GetComponent<SyncedString>() == null
                                     || existing.GetComponent<Team>() == null
                                     || existing.GetComponent<PlayerNameTag>() == null
+                                    || existing.GetComponent<PlayerNameplate>() == null
                                     || existing.GetComponent<TargetedNetEvent>() == null
                                     || existing.transform.Find("HoldPoint") == null;
 
@@ -404,12 +406,71 @@ namespace MPBlocks.Editor
                 nameSo.ApplyModifiedPropertiesWithoutUndo();
             }
 
+            EnsureNameplate(root);
+
             if (root.transform.Find("HoldPoint") == null)
             {
                 var hold = new GameObject("HoldPoint");
                 hold.transform.SetParent(root.transform, false);
                 hold.transform.localPosition = new Vector3(0f, 1.2f, 0.6f);
             }
+        }
+
+        /// <summary>
+        /// Adds the world-space nameplate: a canvas child that is billboarded by
+        /// PlayerNameplate at runtime. Built in code so no scene has to be edited.
+        /// </summary>
+        private static void EnsureNameplate(GameObject root)
+        {
+            if (root.GetComponent<PlayerNameplate>() != null) return;
+
+            var nameTag = root.GetComponent<PlayerNameTag>();
+
+            var canvasGo = new GameObject("Nameplate", typeof(RectTransform), typeof(Canvas));
+            canvasGo.transform.SetParent(root.transform, false);
+            canvasGo.transform.localPosition = new Vector3(0f, 2.3f, 0f);
+            canvasGo.transform.localScale = Vector3.one * 0.01f;
+
+            var canvas = canvasGo.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+
+            var canvasRect = (RectTransform)canvasGo.transform;
+            canvasRect.sizeDelta = new Vector2(320f, 70f);
+
+            var textGo = new GameObject("Label", typeof(RectTransform), typeof(Text));
+            textGo.transform.SetParent(canvasGo.transform, false);
+
+            var textRect = (RectTransform)textGo.transform;
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = Vector2.zero;
+            textRect.offsetMax = Vector2.zero;
+
+            var text = textGo.GetComponent<Text>();
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (text.font == null) text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            text.fontSize = 44;
+            text.fontStyle = FontStyle.Bold;
+            text.alignment = TextAnchor.MiddleCenter;
+            text.color = Color.white;
+            text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Overflow;
+            text.text = "Player";
+
+            var plate = root.AddComponent<PlayerNameplate>();
+            var so = new SerializedObject(plate);
+            SetIfEmpty(so, "nameTag", nameTag);
+            SetIfEmpty(so, "canvas", canvas);
+            SetIfEmpty(so, "label", text);
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void SetIfEmpty(SerializedObject so, string field, Object value)
+        {
+            var prop = so.FindProperty(field);
+            if (prop == null || prop.objectReferenceValue != null) return;
+            prop.objectReferenceValue = value;
+            so.ApplyModifiedPropertiesWithoutUndo();
         }
 
         private static void AssignPlayerPrefab(NetConfig config, GameObject prefab)
