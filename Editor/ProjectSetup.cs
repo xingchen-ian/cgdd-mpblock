@@ -164,6 +164,8 @@ namespace MPBlocks.Editor
                                     || existing.GetComponent<Team>() == null
                                     || existing.GetComponent<PlayerNameTag>() == null
                                     || existing.GetComponent<PlayerNameplate>() == null
+                                    || existing.GetComponent<PlayerAnimator>() == null
+                                    || existing.GetComponent<SyncedAnimator>() == null
                                     || existing.GetComponent<TargetedNetEvent>() == null
                                     || existing.transform.Find("HoldPoint") == null;
 
@@ -406,6 +408,7 @@ namespace MPBlocks.Editor
                 nameSo.ApplyModifiedPropertiesWithoutUndo();
             }
 
+            EnsureAnimationRig(root);
             EnsureNameplate(root);
 
             if (root.transform.Find("HoldPoint") == null)
@@ -413,6 +416,47 @@ namespace MPBlocks.Editor
                 var hold = new GameObject("HoldPoint");
                 hold.transform.SetParent(root.transform, false);
                 hold.transform.localPosition = new Vector3(0f, 1.2f, 0.6f);
+            }
+        }
+
+        /// <summary>
+        /// Adds the animation pair: PlayerAnimator measures speed/grounded and drives the
+        /// owner's rig, SyncedAnimator replicates those parameters to everyone else.
+        /// Parameter names default to Speed / Grounded — the names the template controller uses.
+        /// </summary>
+        private static void EnsureAnimationRig(GameObject root)
+        {
+            var animator = root.GetComponent<PlayerAnimator>();
+            if (animator == null)
+            {
+                animator = root.AddComponent<PlayerAnimator>();
+            }
+
+            var synced = root.GetComponent<SyncedAnimator>();
+            if (synced == null)
+            {
+                synced = root.AddComponent<SyncedAnimator>();
+            }
+
+            var so = new SerializedObject(synced);
+            SetStringArray(so, "floatParameters", new[] { "Speed" });
+            SetStringArray(so, "boolParameters", new[] { "Grounded" });
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            var animatorSo = new SerializedObject(animator);
+            SetIfEmpty(animatorSo, "syncedAnimator", synced);
+            animatorSo.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void SetStringArray(SerializedObject so, string field, string[] values)
+        {
+            var prop = so.FindProperty(field);
+            if (prop == null) return;
+
+            prop.arraySize = values.Length;
+            for (int i = 0; i < values.Length; i++)
+            {
+                prop.GetArrayElementAtIndex(i).stringValue = values[i];
             }
         }
 
