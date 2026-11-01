@@ -24,6 +24,22 @@ namespace MPBlocks.Editor
     {
         public const string RosterPath = "Assets/Settings/CharacterRoster.asset";
 
+        [MenuItem("MPBlocks/Character Selection/Open Character Roster", false, 30)]
+        public static void OpenRoster()
+        {
+            var roster = AssetDatabase.LoadAssetAtPath<CharacterRoster>(RosterPath);
+            if (roster == null)
+            {
+                EditorUtility.DisplayDialog("No roster yet",
+                    "Run MPBlocks > Add Character Selection to Scene first.", "OK");
+                return;
+            }
+
+            Selection.activeObject = roster;
+            EditorGUIUtility.PingObject(roster);
+            Debug.Log("[MP] INFO ROSTER_OPENED path=" + RosterPath);
+        }
+
         [MenuItem("MPBlocks/Add Character Selection to Scene")]
         public static void AddToScene()
         {
