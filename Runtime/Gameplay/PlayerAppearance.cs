@@ -39,6 +39,12 @@ namespace MPBlocks.Gameplay
         /// <summary>Currently applied character index (replicated).</summary>
         public int CharacterIndex => _character.Value;
 
+        /// <summary>The visual prefab instance for the current character, or null when the character only tints the body.</summary>
+        public GameObject VisualInstance => _visualInstance;
+
+        /// <summary>Raised on every machine after the appearance changes (visual instance may be null for tint-only characters). Animation scripts use this to rebind their Animator.</summary>
+        public event System.Action<GameObject> VisualChanged;
+
         /// <summary>Shown in [MP] log lines.</summary>
         public string Label => label;
 
@@ -148,6 +154,7 @@ namespace MPBlocks.Gameplay
                 _visualInstance.transform.localRotation = Quaternion.identity;
 
                 if (bodyRenderer != null) bodyRenderer.enabled = false;
+                VisualChanged?.Invoke(_visualInstance);
                 return;
             }
 
@@ -157,7 +164,11 @@ namespace MPBlocks.Gameplay
                 _visualInstance = null;
             }
 
-            if (bodyRenderer == null) return;
+            if (bodyRenderer == null)
+            {
+                VisualChanged?.Invoke(null);
+                return;
+            }
 
             bodyRenderer.enabled = true;
             _block ??= new MaterialPropertyBlock();
@@ -165,6 +176,8 @@ namespace MPBlocks.Gameplay
             _block.SetColor("_BaseColor", definition.Color);
             _block.SetColor("_Color", definition.Color);
             bodyRenderer.SetPropertyBlock(_block);
+
+            VisualChanged?.Invoke(null);
         }
     }
 }

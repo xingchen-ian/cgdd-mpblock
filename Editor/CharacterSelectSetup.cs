@@ -37,7 +37,7 @@ namespace MPBlocks.Editor
             }
 
             var config = bootstrap.Config;
-            var roster = EnsureRoster();
+            var roster = EnsureRoster(config);
             AssignConfigRoster(config, roster);
 
             var selector = EnsureSelector(roster);
@@ -53,7 +53,7 @@ namespace MPBlocks.Editor
             Debug.Log("[MP] INFO CHARACTER_SELECT_ADDED roster=" + RosterPath + " scene=" + selector.gameObject.scene.name);
         }
 
-        private static CharacterRoster EnsureRoster()
+        private static CharacterRoster EnsureRoster(NetConfig config)
         {
             var roster = AssetDatabase.LoadAssetAtPath<CharacterRoster>(RosterPath);
             if (roster != null) return roster;
@@ -70,17 +70,25 @@ namespace MPBlocks.Editor
             var list = so.FindProperty("characters");
             if (list != null)
             {
-                string[] names = { "Red", "Blue", "Green", "Yellow" };
+                // One character per player slot: New Game Scene already chose the maximum
+                // player count, so the roster starts with exactly that many entries.
+                int count = Mathf.Clamp(config != null ? config.MaxPlayers : 4, 2, 8);
+
+                string[] names = { "Red", "Blue", "Green", "Yellow", "Purple", "Cyan", "Orange", "Pink" };
                 Color[] colors =
                 {
                     new Color(0.85f, 0.25f, 0.25f),
                     new Color(0.25f, 0.45f, 0.95f),
                     new Color(0.25f, 0.80f, 0.35f),
                     new Color(0.95f, 0.80f, 0.20f),
+                    new Color(0.60f, 0.30f, 0.85f),
+                    new Color(0.25f, 0.80f, 0.85f),
+                    new Color(0.95f, 0.55f, 0.20f),
+                    new Color(0.95f, 0.45f, 0.75f),
                 };
 
-                list.arraySize = names.Length;
-                for (int i = 0; i < names.Length; i++)
+                list.arraySize = count;
+                for (int i = 0; i < count; i++)
                 {
                     var element = list.GetArrayElementAtIndex(i);
                     var displayName = element.FindPropertyRelative("displayName");

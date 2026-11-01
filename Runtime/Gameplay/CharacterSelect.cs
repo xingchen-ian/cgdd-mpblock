@@ -88,6 +88,16 @@ namespace MPBlocks.Gameplay
                     ("label", label),
                     ("count", _resolvedRoster.Count),
                     ("unique", !allowDuplicates));
+
+                if (!allowDuplicates && bootstrap != null && bootstrap.Config != null
+                    && _resolvedRoster.Count < bootstrap.Config.MaxPlayers)
+                {
+                    MPLog.Warn("CHARACTER_SELECT_SHORT",
+                        ("label", label),
+                        ("characters", _resolvedRoster.Count),
+                        ("maxPlayers", bootstrap.Config.MaxPlayers),
+                        ("hint", "create one character per player slot"));
+                }
             }
         }
 
