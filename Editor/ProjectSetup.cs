@@ -25,7 +25,7 @@ namespace MPBlocks.Editor
     public static class ProjectSetup
     {
         /// <summary>Bump when the generated scene layout changes.</summary>
-        public const int SetupVersion = 19;
+        public const int SetupVersion = 20;
 
         public const string SettingsFolder = "Assets/Settings";
         public const string ScenesFolder = "Assets/Scenes";
@@ -79,6 +79,10 @@ namespace MPBlocks.Editor
         public static void Setup(bool force)
         {
             EnsureFolder("Assets", "Settings");
+
+            // Batch builds never reach EditorApplication.delayCall, so generate the placeholder
+            // sound library here as well; students need the assets on disk to drag in.
+            InteractAudio.GenerateAll(silent: false);
             EnsureFolder("Assets", "Scenes");
 
             var config = AssetDatabase.LoadAssetAtPath<NetConfig>(ConfigPath);
@@ -167,6 +171,7 @@ namespace MPBlocks.Editor
                                     || existing.GetComponent<PlayerNameplate>() == null
                                     || existing.GetComponent<PlayerAnimator>() == null
                                     || existing.GetComponent<SyncedAnimator>() == null
+                                    || existing.GetComponent<AudioOneShot>() == null
                                     || existing.GetComponent<TargetedNetEvent>() == null
                                     || existing.transform.Find("HoldPoint") == null;
 
@@ -408,6 +413,9 @@ namespace MPBlocks.Editor
                 nameProp.objectReferenceValue = syncedName;
                 nameSo.ApplyModifiedPropertiesWithoutUndo();
             }
+
+            SceneKit.AddAudioOneShot(root, InteractAudio.Hit(), AudioOneShot.Trigger.OnHealthChanged, "hit");
+            SceneKit.AddAudioOneShot(root, InteractAudio.Death(), AudioOneShot.Trigger.OnDeath, "death");
 
             EnsureAnimationRig(root);
             EnsureNameplate(root);

@@ -128,6 +128,8 @@ namespace MPBlocks.Editor
                 renderer.sharedMaterial.color = new Color(0.72f, 0.25f, 0.28f);
             }
 
+            SceneKit.AddAudioOneShot(root, InteractAudio.Death(), AudioOneShot.Trigger.OnDeath, "enemy-death");
+
             var killScore = root.AddComponent<KillScore>();
             Set(killScore, "label", "enemy");
             Set(killScore, "health", health);

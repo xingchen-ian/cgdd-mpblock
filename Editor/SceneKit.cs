@@ -439,6 +439,45 @@ namespace MPBlocks.Editor
         /// Adds the click/thud feedback to any object that has an Interactable. Kept next to
         /// the interactable it belongs to, so a lever can sound different from a phone.
         /// </summary>
+        /// <summary>
+        /// Adds a one-shot sound to any object. Used for deaths, hits and shots, where there is
+        /// no Interactable to hang an InteractSound on.
+        /// </summary>
+        public static MPBlocks.Gameplay.AudioOneShot AddAudioOneShot(GameObject root, AudioClip clip,
+            MPBlocks.Gameplay.AudioOneShot.Trigger trigger, string label)
+        {
+            if (root == null || clip == null) return null;
+
+            // An object can need several one-shots (hit and death, for example), so match on
+            // the label instead of reusing whatever component happens to be first.
+            MPBlocks.Gameplay.AudioOneShot audio = null;
+            foreach (var candidate in root.GetComponents<MPBlocks.Gameplay.AudioOneShot>())
+            {
+                if (candidate == null) continue;
+
+                var candidateSo = new SerializedObject(candidate);
+                var candidateLabel = candidateSo.FindProperty("label");
+                if (candidateLabel != null && candidateLabel.stringValue == label)
+                {
+                    audio = candidate;
+                    break;
+                }
+            }
+
+            if (audio == null) audio = root.AddComponent<MPBlocks.Gameplay.AudioOneShot>();
+
+            var so = new SerializedObject(audio);
+            var clipProp = so.FindProperty("clip");
+            if (clipProp != null) clipProp.objectReferenceValue = clip;
+            var triggerProp = so.FindProperty("trigger");
+            if (triggerProp != null) triggerProp.intValue = (int)trigger;
+            var labelProp = so.FindProperty("label");
+            if (labelProp != null) labelProp.stringValue = label;
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            return audio;
+        }
+
         public static MPBlocks.Gameplay.InteractSound AddInteractSound(GameObject root, string label)
         {
             if (root == null) return null;

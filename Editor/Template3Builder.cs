@@ -110,6 +110,7 @@ namespace MPBlocks.Editor
             SceneKit.SetSerialized(synced, "label", "projectile");
 
             Projectile projectile = root.AddComponent<Projectile>();
+            SceneKit.AddAudioOneShot(root, InteractAudio.Shot(), AudioOneShot.Trigger.OnEnable, "shot");
             SceneKit.SetSerialized(projectile, "label", "projectile");
             SceneKit.SetSerialized(projectile, "hitRadius", 0.8f);
             SceneKit.SetSerialized(projectile, "bodyCenterHeight", 1f);
