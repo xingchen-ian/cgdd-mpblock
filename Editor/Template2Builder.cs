@@ -2,6 +2,7 @@ using MPBlocks.Core;
 using MPBlocks.Gameplay;
 using MPBlocks.Sync;
 using Unity.Netcode;
+using UnityEditor;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -93,6 +94,24 @@ namespace MPBlocks.Editor
         /// adds the NetworkObject and the Interactable; CoopDoor subscribes to its
         /// approval event on the server.
         /// </summary>
+        /// <summary>
+        /// Adds the co-op pair to whatever scene is open: two levers, a sliding door and a
+        /// CoopDoor wired together. The fastest way to put a two-player gate into a scene
+        /// that New Game Scene already generated.
+        /// </summary>
+        [MenuItem("MPBlocks/Add Co-op Door Kit to Scene", false, 31)]
+        public static void AddCoopKitToScene()
+        {
+            var leverA = BuildLever("Lever_A", new Vector3(2.6f, 0f, 0f));
+            var leverB = BuildLever("Lever_B", new Vector3(-2.6f, 0f, 0f));
+            BuildDoor(leverA, leverB);
+
+            UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene());
+
+            Debug.Log("[MP] INFO COOP_KIT_ADDED levers=2 window=2.5s");
+        }
+
         private static Interactable BuildLever(string name, Vector3 position)
         {
             var root = SceneKit.CreateLever(name, position, 4f, LeverHandleColor);

@@ -31,6 +31,12 @@ namespace MPBlocks.Gameplay
         [Tooltip("How many levers must be pulled before the server sets isOpen to true. Clamped to at least 1; if it is larger than the levers array the door never opens, and pulled/required in the [MP] logs never match.")]
         [SerializeField] private int requiredLevers = 2;
 
+        [Tooltip("Seconds within which every lever must be pulled. 0 disables the window (old behaviour: any pace works). Set 2-4 so one player cannot walk between the levers alone.")]
+        [SerializeField] private float windowSeconds = 2.5f;
+
+        [Tooltip("Turn the levers back off when the window expires, so the attempt visibly fails.")]
+        [SerializeField] private bool resetLeversOnTimeout = true;
+
         [Tooltip("Seconds the panel takes to slide. 0 or negative snaps it instantly; this is a local visual animation only and does not affect sync or approval.")]
         [SerializeField] private float slideSeconds = 0.6f;
 
@@ -39,6 +45,7 @@ namespace MPBlocks.Gameplay
         private float _progress;
 
         private int _pulledLevers;
+        private float _windowStart;
         private readonly System.Collections.Generic.HashSet<int> _usedLevers = new System.Collections.Generic.HashSet<int>();
         private System.Action<ulong>[] _handlers;
 
@@ -54,6 +61,11 @@ namespace MPBlocks.Gameplay
             {
                 isOpen.OnChanged.AddListener(HandleOpenChanged);
                 HandleOpenChanged(isOpen.Value);
+            }
+
+            if (IsServer && HasArgument("-mp-coop-demo"))
+            {
+                StartCoroutine(CoopDemo());
             }
 
             if (IsServer && levers != null)
@@ -91,6 +103,21 @@ namespace MPBlocks.Gameplay
 
             // Each lever only counts once, otherwise a single player could pull one
             // lever twice and defeat the whole point of a co-op door.
+            if (windowSeconds > 0f)
+            {
+                if (_pulledLevers == 0)
+                {
+                    _windowStart = Time.time;
+                }
+                else if (Time.time - _windowStart > windowSeconds)
+                {
+                    // The window already closed between the two pulls: start a new attempt
+                    // with this lever instead of letting a slow solo player finish.
+                    ResetAttempt("too_slow");
+                    _windowStart = Time.time;
+                }
+            }
+
             if (!_usedLevers.Add(leverIndex)) return;
 
             _pulledLevers++;
@@ -110,8 +137,78 @@ namespace MPBlocks.Gameplay
             }
         }
 
+        /// <summary>
+        /// Test hook (-mp-coop-demo): pull one lever, let the window expire, then pull both
+        /// back to back. Proves a solo player is refused and two quick pulls still open.
+        /// </summary>
+        private System.Collections.IEnumerator CoopDemo()
+        {
+            yield return new WaitForSeconds(2f);
+
+            HandleLeverApproved(0);
+            MPLog.Info("COOP_DEMO_PULLED_ONE", ("progress", _pulledLevers));
+
+            yield return new WaitForSeconds(Mathf.Max(windowSeconds, 0.5f) + 0.6f);
+
+            MPLog.Info("COOP_DEMO_AFTER_WINDOW",
+                ("progress", _pulledLevers),
+                ("result", _pulledLevers == 0 ? "reset_ok" : "reset_failed"));
+
+            HandleLeverApproved(0);
+            HandleLeverApproved(1);
+
+            yield return new WaitForSeconds(0.4f);
+            MPLog.Info("COOP_DEMO_DONE", ("open", isOpen != null && isOpen.Value));
+        }
+
+        private void ResetAttempt(string reason)
+        {
+            if (_pulledLevers == 0 && _usedLevers.Count == 0) return;
+
+            int lost = _pulledLevers;
+            _pulledLevers = 0;
+            _usedLevers.Clear();
+            _windowStart = 0f;
+
+            MPLog.Info("DOOR_ATTEMPT_RESET", ("reason", reason), ("lost", lost), ("window", windowSeconds));
+
+            if (!resetLeversOnTimeout || levers == null) return;
+
+            foreach (var lever in levers)
+            {
+                if (lever == null) continue;
+
+                var toggle = lever.GetComponent<InteractToggle>();
+                if (toggle != null && toggle.State != null) toggle.State.SetServerValue(false);
+            }
+        }
+
+        private static bool HasArgument(string name)
+        {
+            try
+            {
+                foreach (var arg in System.Environment.GetCommandLineArgs())
+                {
+                    if (arg == name) return true;
+                }
+            }
+            catch
+            {
+                // ignored
+            }
+
+            return false;
+        }
+
         private void Update()
         {
+            if (IsServer && windowSeconds > 0f && _pulledLevers > 0
+                && (isOpen == null || !isOpen.Value)
+                && Time.time - _windowStart > windowSeconds)
+            {
+                ResetAttempt("window_expired");
+            }
+
             if (doorPanel == null || isOpen == null) return;
 
             float target = isOpen.Value ? 1f : 0f;
