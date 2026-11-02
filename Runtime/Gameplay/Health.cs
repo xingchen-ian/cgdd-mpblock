@@ -35,11 +35,16 @@ namespace MPBlocks.Gameplay
         private readonly NetworkVariable<int> _current = new NetworkVariable<int>(
             0, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+        private ulong _lastAttacker;
+
         /// <summary>Raised on every machine: (current, max).</summary>
         public event Action<int, int> Changed;
 
         /// <summary>Raised once when health crosses to zero.</summary>
         public event Action Died;
+
+        /// <summary>Raised on the server with the client id that dealt the killing blow (0 when unknown).</summary>
+        public event Action<ulong> DiedBy;
 
         public string Label => label;
         public int Max => maxHealth;
@@ -79,11 +84,18 @@ namespace MPBlocks.Gameplay
             {
                 onDied?.Invoke();
                 Died?.Invoke();
+                DiedBy?.Invoke(_lastAttacker);
             }
         }
 
         /// <summary>Server only. Reduces health by <paramref name="amount"/>.</summary>
-        public void ApplyDamage(int amount)
+        public void ApplyDamage(int amount) => ApplyDamage(amount, 0UL);
+
+        /// <summary>
+        /// Server only. Applies damage and remembers the attacker so a kill can be scored.
+        /// Pass the shooter's client id; 0 means "unknown attacker".
+        /// </summary>
+        public void ApplyDamage(int amount, ulong attackerClientId)
         {
             if (!IsServer)
             {
@@ -92,6 +104,10 @@ namespace MPBlocks.Gameplay
             }
 
             if (amount <= 0 || IsDead) return;
+
+            // Remember the latest source before the value changes, because the death event
+            // fires from the value-changed callback.
+            _lastAttacker = attackerClientId;
 
             int next = Mathf.Max(0, _current.Value - amount);
             _current.Value = next;

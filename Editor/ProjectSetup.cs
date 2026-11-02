@@ -25,7 +25,7 @@ namespace MPBlocks.Editor
     public static class ProjectSetup
     {
         /// <summary>Bump when the generated scene layout changes.</summary>
-        public const int SetupVersion = 18;
+        public const int SetupVersion = 19;
 
         public const string SettingsFolder = "Assets/Settings";
         public const string ScenesFolder = "Assets/Scenes";

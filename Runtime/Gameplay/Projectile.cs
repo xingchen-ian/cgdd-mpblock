@@ -120,7 +120,7 @@ namespace MPBlocks.Gameplay
                 Vector3 center = health.transform.position + Vector3.up * bodyCenterHeight;
                 if ((center - transform.position).sqrMagnitude > hitRadius * hitRadius) continue;
 
-                health.ApplyDamage(_damage);
+                health.ApplyDamage(_damage, _shooterClientId);
                 MPLog.Info("PROJECTILE_HIT", ("owner", _shooterClientId), ("victim", victimObject.OwnerClientId), ("damage", _damage));
 
                 if (health.IsDead) HandleKill(victimObject.OwnerClientId);

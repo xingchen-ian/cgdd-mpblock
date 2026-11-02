@@ -128,6 +128,10 @@ namespace MPBlocks.Editor
                 renderer.sharedMaterial.color = new Color(0.72f, 0.25f, 0.28f);
             }
 
+            var killScore = root.AddComponent<KillScore>();
+            Set(killScore, "label", "enemy");
+            Set(killScore, "health", health);
+
             var damage = root.AddComponent<DamageOnInteract>();
             Set(damage, "interactable", interactable);
             Set(damage, "health", health);

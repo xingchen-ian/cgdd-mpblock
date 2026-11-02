@@ -150,6 +150,10 @@ namespace MPBlocks.Editor
             SceneKit.SetSerialized(shooter, "damage", 25);
             SceneKit.SetSerialized(shooter, "muzzleHeight", 1.2f);
 
+            KillScore killScore = root.AddComponent<KillScore>();
+            SceneKit.SetSerialized(killScore, "label", "player");
+            SceneKit.SetSerialized(killScore, "health", health);
+
             PlayerRespawn respawn = root.AddComponent<PlayerRespawn>();
             SceneKit.SetSerialized(respawn, "health", health);
             SceneKit.SetSerialized(respawn, "respawnSeconds", 3f);

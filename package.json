@@ -1,6 +1,6 @@
 {
   "name": "com.cgdd.mpblocks",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "displayName": "MPBlocks",
   "description": "Composable multiplayer building blocks for LAN and exhibition games on Unity 2022.3. Built on Netcode for GameObjects. Provides session bootstrapping, authority-aware state sync, request/validate gameplay primitives, and in-game network diagnostics.",
   "unity": "2022.3",
