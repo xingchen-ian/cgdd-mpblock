@@ -123,6 +123,7 @@ namespace MPBlocks.Editor
             }
 
             CheckNetConfigs(issues);
+            CheckAudioClips(issues);
 
             return issues;
         }
@@ -280,6 +281,55 @@ namespace MPBlocks.Editor
                 {
                     issues.Add(new Issue(true, path, "maxPlayers is below 1"));
                 }
+            }
+        }
+
+        /// <summary>
+        /// Every audio clip in the project must contain samples. A clip written with
+        /// AudioClip.Create + CreateAsset keeps only its header (length 0, silence), which
+        /// looks fine in the Project window and plays nothing — the exact bug this catches.
+        /// </summary>
+        private static void CheckAudioClips(List<Issue> issues)
+        {
+            // Scan files rather than FindAssets("t:AudioClip"): an audio file that fails to
+            // import has no AudioClip object, so a type filter would silently miss exactly the
+            // broken case this check exists for.
+            var extensions = new[] { "*.wav", "*.ogg", "*.mp3", "*.aif", "*.aiff", "*.flac" };
+            var seen = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+
+            foreach (var pattern in extensions)
+            {
+                foreach (var file in Directory.GetFiles("Assets", pattern, SearchOption.AllDirectories))
+                {
+                    var path = file.Replace('\\', '/');
+                    if (!seen.Add(path)) continue;
+
+                    var clip = AssetDatabase.LoadAssetAtPath<AudioClip>(path);
+                    if (clip == null)
+                    {
+                        issues.Add(new Issue(true, Path.GetFileName(path), path,
+                            "audio clip failed to import (no samples or corrupt); " +
+                            "regenerate with MPBlocks > Audio > Generate Placeholder Sounds"));
+                        continue;
+                    }
+
+                    if (clip.length > 0.005f && clip.samples > 0) continue;
+
+                    issues.Add(new Issue(true, Path.GetFileName(path), path,
+                        $"audio clip is empty (length {clip.length:0.###}s, samples {clip.samples}); " +
+                        "regenerate with MPBlocks > Audio > Generate Placeholder Sounds"));
+                }
+            }
+
+            // Legacy shells: AudioClip saved as .asset by an older toolkit version.
+            foreach (var file in Directory.GetFiles("Assets", "*.asset", SearchOption.AllDirectories))
+            {
+                var path = file.Replace('\\', '/');
+                var clip = AssetDatabase.LoadAssetAtPath<AudioClip>(path);
+                if (clip == null) continue;
+
+                issues.Add(new Issue(true, Path.GetFileName(path), path,
+                    "audio clip saved as .asset has no sample data (length 0); the toolkit now writes .wav files"));
             }
         }
 
