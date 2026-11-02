@@ -34,6 +34,7 @@ namespace MPBlocks.Editor
             BuildSpawner(crate);
             BuildPhone();
             BuildRoleManager();
+            BuildSpawnPoints();
             BuildTeamManager();
             BuildSeerOnlyProp();
             CharacterSelectSetup.Apply(config);
@@ -196,6 +197,25 @@ namespace MPBlocks.Editor
                 prop.arraySize = 1;
                 prop.GetArrayElementAtIndex(0).intValue = 1;
                 so.ApplyModifiedPropertiesWithoutUndo();
+            }
+        }
+
+        /// <summary>
+        /// Four spawn points in a ring. Without them every player spawns at the world origin,
+        /// on top of everyone else — which looks like "the other player is missing".
+        /// </summary>
+        private static void BuildSpawnPoints()
+        {
+            const int count = 4;
+            const float radius = 3f;
+
+            for (int i = 0; i < count; i++)
+            {
+                float angle = i * Mathf.PI * 2f / count;
+                var point = new GameObject("SpawnPoint_" + (i + 1));
+                point.transform.position = new Vector3(Mathf.Sin(angle) * radius, 0f, Mathf.Cos(angle) * radius);
+                point.transform.rotation = Quaternion.LookRotation(-point.transform.position);
+                point.AddComponent<PlayerSpawnPoint>();
             }
         }
 

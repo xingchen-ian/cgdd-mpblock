@@ -70,7 +70,15 @@ namespace MPBlocks.Gameplay
                     visible = false;
                 }
 
-                if (canvas.enabled != visible) canvas.enabled = visible;
+                if (canvas.enabled != visible)
+                {
+                    canvas.enabled = visible;
+                    MPLog.Info("NAMEPLATE_VISIBILITY",
+                        ("name", _lastText),
+                        ("clientId", _networkObject != null ? _networkObject.OwnerClientId : 0),
+                        ("active", visible),
+                        ("isOwner", _networkObject != null && _networkObject.IsOwner));
+                }
 
                 // Billboard: match the camera's rotation so the text always faces the viewer.
                 if (visible) canvas.transform.rotation = camera.transform.rotation;
