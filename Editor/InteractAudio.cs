@@ -20,17 +20,17 @@ namespace MPBlocks.Editor
         public const string Folder = "Assets/Audio";
 
         // interaction feedback (InteractSound)
-        public const string ApprovedPath = Folder + "/Interact_Approved.asset";
-        public const string DeniedPath = Folder + "/Interact_Denied.asset";
+        public const string ApprovedPath = Folder + "/Interact_Approved.wav";
+        public const string DeniedPath = Folder + "/Interact_Denied.wav";
 
         // combat and gameplay feedback (AudioOneShot, or any AudioSource)
-        public const string ShotPath = Folder + "/Shot_Fire.asset";
-        public const string HitPath = Folder + "/Hit_Damage.asset";
-        public const string DeathPath = Folder + "/Player_Death.asset";
-        public const string RespawnPath = Folder + "/Player_Respawn.asset";
-        public const string PickupPath = Folder + "/Pickup.asset";
-        public const string DoorPath = Folder + "/Door_Open.asset";
-        public const string ScorePath = Folder + "/Score_Point.asset";
+        public const string ShotPath = Folder + "/Shot_Fire.wav";
+        public const string HitPath = Folder + "/Hit_Damage.wav";
+        public const string DeathPath = Folder + "/Player_Death.wav";
+        public const string RespawnPath = Folder + "/Player_Respawn.wav";
+        public const string PickupPath = Folder + "/Pickup.wav";
+        public const string DoorPath = Folder + "/Door_Open.wav";
+        public const string ScorePath = Folder + "/Score_Point.wav";
 
         [InitializeOnLoadMethod]
         private static void EnsureClipsOnLoad()
@@ -55,6 +55,7 @@ namespace MPBlocks.Editor
 
         public static void GenerateAll(bool silent)
         {
+            DeleteLegacyAssetClips();
             int before = ExistingCount();
 
             Approved();
@@ -99,20 +100,29 @@ namespace MPBlocks.Editor
         private static AudioClip Ensure(string path, string name, float seconds, float startHz, float endHz,
             float gain, Shape shape, float noiseMix)
         {
-            var existing = AssetDatabase.LoadAssetAtPath<AudioClip>(path);
-            if (existing != null) return existing;
+            // A generated AudioClip cannot be saved as an .asset: Unity writes only the header,
+            // so the clip ends up with length 0 and silence. A real .wav file on disk is
+            // imported like any other sound and keeps its samples.
+            if (!File.Exists(path)) WriteWav(path, seconds, startHz, endHz, gain, shape, noiseMix);
 
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+            return AssetDatabase.LoadAssetAtPath<AudioClip>(path);
+        }
+
+        private static void WriteWav(string path, float seconds, float startHz, float endHz,
+            float gain, Shape shape, float noiseMix)
+        {
             if (!AssetDatabase.IsValidFolder(Folder))
             {
-                if (!AssetDatabase.IsValidFolder("Assets")) return null;
+                if (!AssetDatabase.IsValidFolder("Assets")) return;
                 AssetDatabase.CreateFolder("Assets", "Audio");
             }
 
             const int rate = 44100;
             int count = Mathf.Max(1, Mathf.RoundToInt(rate * seconds));
-            var data = new float[count];
+            var samples = new float[count];
 
-            // Deterministic noise: regenerating the asset gives the identical clip.
+            // Deterministic noise: regenerating gives the identical clip.
             uint seed = 12345u;
             float phase = 0f;
 
@@ -144,20 +154,66 @@ namespace MPBlocks.Editor
                     tone = tone * (1f - noiseMix) + noise * noiseMix;
                 }
 
-                // Exponential decay is what makes a tone read as a click/thud instead of a beep.
                 float envelope = Mathf.Exp(-6f * progress);
-
-                data[i] = Mathf.Clamp(tone * envelope * gain, -1f, 1f);
+                samples[i] = Mathf.Clamp(tone * envelope * gain, -1f, 1f);
             }
 
-            var clip = AudioClip.Create(name, count, 1, rate, false);
-            clip.SetData(data, 0);
-
-            AssetDatabase.CreateAsset(clip, path);
-            AssetDatabase.SaveAssets();
+            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? "Assets/Audio");
+            File.WriteAllBytes(path, BuildWavBytes(samples, rate));
 
             Debug.Log("[MP] INFO AUDIO_CLIP_CREATED path=" + path);
-            return clip;
+        }
+
+        /// <summary>16-bit mono PCM in a RIFF/WAVE container.</summary>
+        private static byte[] BuildWavBytes(float[] samples, int rate)
+        {
+            using (var stream = new MemoryStream(44 + samples.Length * 2))
+            using (var writer = new BinaryWriter(stream))
+            {
+                int dataBytes = samples.Length * 2;
+
+                writer.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));
+                writer.Write(36 + dataBytes);
+                writer.Write(System.Text.Encoding.ASCII.GetBytes("WAVE"));
+                writer.Write(System.Text.Encoding.ASCII.GetBytes("fmt "));
+                writer.Write(16);            // PCM chunk size
+                writer.Write((short)1);      // PCM
+                writer.Write((short)1);      // mono
+                writer.Write(rate);
+                writer.Write(rate * 2);      // byte rate
+                writer.Write((short)2);      // block align
+                writer.Write((short)16);     // bits per sample
+                writer.Write(System.Text.Encoding.ASCII.GetBytes("data"));
+                writer.Write(dataBytes);
+
+                foreach (float sample in samples)
+                {
+                    writer.Write((short)Mathf.Clamp(Mathf.RoundToInt(sample * 32767f), short.MinValue, short.MaxValue));
+                }
+
+                writer.Flush();
+                return stream.ToArray();
+            }
+        }
+
+        /// <summary>
+        /// Removes the empty .asset clips that an earlier version of this tool wrote. They have
+        /// length 0 and would otherwise stay wired into prefabs forever.
+        /// </summary>
+        private static void DeleteLegacyAssetClips()
+        {
+            foreach (var name in new[]
+                     {
+                         "Interact_Approved", "Interact_Denied", "Shot_Fire", "Hit_Damage",
+                         "Player_Death", "Player_Respawn", "Pickup", "Door_Open", "Score_Point",
+                     })
+            {
+                var legacy = Folder + "/" + name + ".asset";
+                if (AssetDatabase.LoadAssetAtPath<AudioClip>(legacy) == null) continue;
+
+                AssetDatabase.DeleteAsset(legacy);
+                Debug.Log("[MP] INFO AUDIO_LEGACY_REMOVED path=" + legacy);
+            }
         }
 
         private static int ExistingCount()

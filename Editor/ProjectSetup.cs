@@ -95,6 +95,7 @@ namespace MPBlocks.Editor
             }
 
             EnsurePlayerPrefab(config);
+            RepairPlayerPrefab(config);
             EnsureRigidbodyPlayerPrefab(config);
             EnsureScoreboardPrefab(config);
             AssignMissingRigidbodyPrefabs();
@@ -152,6 +153,55 @@ namespace MPBlocks.Editor
         /// owning client enables, and the sync/move blocks. Groups are expected to
         /// replace this with their own avatar.
         /// </summary>
+        /// <summary>
+        /// Repairs the player prefab in place. Kept idempotent and called on every setup, so a
+        /// migration (for example swapping empty audio assets for real wav clips) heals itself.
+        /// </summary>
+        /// <summary>
+        /// Re-points the audio on the player prefab when a clip reference went missing — for
+        /// example after the placeholder clips moved from empty .asset shells to real .wav files.
+        /// Only writes the prefab when there is something to repair.
+        /// </summary>
+        private static void RepairPlayerPrefab(NetConfig config)
+        {
+            if (config == null || config.PlayerPrefab == null) return;
+
+            var path = AssetDatabase.GetAssetPath(config.PlayerPrefab);
+            if (string.IsNullOrEmpty(path)) return;
+
+            if (!NeedsAudioRepair(config.PlayerPrefab)) return;
+
+            var contents = PrefabUtility.LoadPrefabContents(path);
+            EnsurePlayerExtras(contents);
+            PrefabUtility.SaveAsPrefabAsset(contents, path);
+            PrefabUtility.UnloadPrefabContents(contents);
+
+            Debug.Log("[MP] INFO SETUP_PLAYER_AUDIO_REPAIRED path=" + path);
+        }
+
+        private static bool NeedsAudioRepair(GameObject prefab)
+        {
+            foreach (var audio in prefab.GetComponentsInChildren<AudioOneShot>(true))
+            {
+                if (audio == null) continue;
+
+                var so = new SerializedObject(audio);
+                var clip = so.FindProperty("clip");
+                if (clip != null && clip.objectReferenceValue == null) return true;
+            }
+
+            foreach (var interactSound in prefab.GetComponentsInChildren<InteractSound>(true))
+            {
+                if (interactSound == null) continue;
+
+                var so = new SerializedObject(interactSound);
+                var approved = so.FindProperty("approvedClip");
+                if (approved != null && approved.objectReferenceValue == null) return true;
+            }
+
+            return false;
+        }
+
         private static void EnsurePlayerPrefab(NetConfig config)
         {
             EnsureFolder("Assets", "Prefabs");
