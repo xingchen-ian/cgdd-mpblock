@@ -97,6 +97,8 @@ namespace MPBlocks.Editor
             SceneKit.SetSerialized(state, "label", syncedLabel);
 
             var interactable = root.AddComponent<Interactable>();
+
+            SceneKit.AddInteractSound(root, root.name);
             SceneKit.SetSerialized(interactable, "label", name);
             SceneKit.SetSerialized(interactable, "maxDistance", 4f);
 

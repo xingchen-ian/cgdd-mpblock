@@ -25,7 +25,7 @@ namespace MPBlocks.Editor
     public static class ProjectSetup
     {
         /// <summary>Bump when the generated scene layout changes.</summary>
-        public const int SetupVersion = 17;
+        public const int SetupVersion = 18;
 
         public const string SettingsFolder = "Assets/Settings";
         public const string ScenesFolder = "Assets/Scenes";
@@ -100,7 +100,7 @@ namespace MPBlocks.Editor
                             || !SceneHasSpawner() || !SceneHasLatencySimulator() || !SceneHasNetDiag()
                             || !SceneHasPhone() || !SceneHasRoleManager() || !SceneHasTeamManager()
                             || !SceneHasSeerMarker() || !SceneHasNameInput() || !SceneHasCharacterSelect()
-                            || !SceneHasSpawnPoints();
+                            || !SceneHasSpawnPoints() || !SceneHasInteractSound();
             if (needsScene)
             {
                 BuildScene(config);
@@ -605,6 +605,16 @@ namespace MPBlocks.Editor
             if (string.IsNullOrEmpty(guid)) return false;
 
             return File.ReadAllText(ScenePath).Contains("guid: " + guid);
+        }
+
+        private static bool SceneHasInteractSound()
+        {
+            if (!File.Exists(ScenePath)) return false;
+
+            var guid = InteractAudio.ApprovedGuid();
+            if (string.IsNullOrEmpty(guid)) return false;
+
+            return File.ReadAllText(ScenePath).Contains(guid);
         }
 
         private static bool SceneHasSpawnPoints()

@@ -164,6 +164,8 @@ namespace MPBlocks.Editor
             SceneKit.SetSerialized(health, "maxHealth", 100);
 
             var interactable = root.AddComponent<Interactable>();
+
+            SceneKit.AddInteractSound(root, root.name);
             SceneKit.SetSerialized(interactable, "label", "Target");
             SceneKit.SetSerialized(interactable, "maxDistance", 4f);
 

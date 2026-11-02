@@ -419,7 +419,43 @@ namespace MPBlocks.Editor
             var handle = CreateBlock("Handle", position + new Vector3(0f, 0.6f, 0f),
                 new Vector3(0.35f, 1.2f, 0.35f), handleColor);
             handle.transform.SetParent(root.transform, true);
+
+            var state = root.AddComponent<MPBlocks.Sync.SyncedBool>();
+            SetSerialized(state, "label", name + "On");
+
+            var toggle = root.AddComponent<MPBlocks.Gameplay.InteractToggle>();
+            SetSerialized(toggle, "interactable", interactable);
+            SetSerialized(toggle, "state", state);
+            SetSerialized(toggle, "targetRenderer", handle.GetComponent<Renderer>());
+            SetSerialized(toggle, "offColor", new Color(handleColor.r * 0.35f, handleColor.g * 0.35f, handleColor.b * 0.35f, 1f));
+            SetSerialized(toggle, "onColor", Color.Lerp(handleColor, Color.white, 0.35f));
+
+            AddInteractSound(root, name);
+
             return root;
+        }
+
+        /// <summary>
+        /// Adds the click/thud feedback to any object that has an Interactable. Kept next to
+        /// the interactable it belongs to, so a lever can sound different from a phone.
+        /// </summary>
+        public static MPBlocks.Gameplay.InteractSound AddInteractSound(GameObject root, string label)
+        {
+            if (root == null) return null;
+
+            var sound = root.GetComponent<MPBlocks.Gameplay.InteractSound>();
+            if (sound == null) sound = root.AddComponent<MPBlocks.Gameplay.InteractSound>();
+
+            var so = new SerializedObject(sound);
+            var labelProp = so.FindProperty("label");
+            if (labelProp != null) labelProp.stringValue = label;
+            var approved = so.FindProperty("approvedClip");
+            if (approved != null) approved.objectReferenceValue = InteractAudio.Approved();
+            var denied = so.FindProperty("deniedClip");
+            if (denied != null) denied.objectReferenceValue = InteractAudio.Denied();
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            return sound;
         }
 
         public static void SetSerialized(Object target, string field, object value)

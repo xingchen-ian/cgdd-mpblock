@@ -69,27 +69,8 @@ namespace MPBlocks.Editor
 
         private static Interactable BuildLever(string name, Vector3 position)
         {
-            var root = new GameObject(name);
-            root.transform.position = position;
-            root.AddComponent<NetworkObject>();
-
-            var interactable = root.AddComponent<Interactable>();
-            Set(interactable, "label", name);
-            Set(interactable, "maxDistance", 4f);
-
-            var handle = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            handle.name = "Handle";
-            handle.transform.SetParent(root.transform, false);
-            handle.transform.localPosition = new Vector3(0f, 0.6f, 0f);
-            handle.transform.localScale = new Vector3(0.35f, 1.2f, 0.35f);
-
-            var renderer = handle.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                renderer.sharedMaterial.color = new Color(0.95f, 0.72f, 0.20f);
-            }
-
-            return interactable;
+            var root = SceneKit.CreateLever(name, position, 4f, new Color(0.95f, 0.72f, 0.20f));
+            return root.GetComponent<Interactable>();
         }
 
         private static void BuildDoor(Interactable leverA, Interactable leverB)
@@ -131,6 +112,8 @@ namespace MPBlocks.Editor
             Set(health, "maxHealth", 100);
 
             var interactable = root.AddComponent<Interactable>();
+
+            SceneKit.AddInteractSound(root, root.name);
             Set(interactable, "label", "Enemy");
             Set(interactable, "maxDistance", 4f);
 
@@ -245,6 +228,8 @@ namespace MPBlocks.Editor
             Set(synced, "label", "phone");
 
             var interactable = root.AddComponent<Interactable>();
+
+            SceneKit.AddInteractSound(root, root.name);
             Set(interactable, "label", "Phone");
             Set(interactable, "maxDistance", 4f);
 
