@@ -459,6 +459,8 @@ namespace MPBlocks.Editor
 
             // One-shot actions: any other clip whose name says what it does becomes a Trigger
             // state, so "drop attack.fbx in the folder and press F" works without scripting.
+            var actionMapping = new List<string>();
+
             foreach (var action in FindActions(character))
             {
                 var clip = LoadFirstClip(action.Value);
@@ -483,6 +485,7 @@ namespace MPBlocks.Editor
                 exit.exitTime = 0.9f;
                 exit.duration = 0.1f;
 
+                actionMapping.Add($"{action.Key}={Path.GetFileNameWithoutExtension(action.Value)}");
                 Debug.Log($"[MP] INFO CHARACTER_ACTION name={character.Name} action={action.Key}");
             }
 
@@ -502,7 +505,12 @@ namespace MPBlocks.Editor
                 exit.AddCondition(AnimatorConditionMode.If, 0f, "Grounded");
             }
 
-            Debug.Log($"[MP] INFO CHARACTER_CONTROLLER name={character.Name} clips={string.Join("/", clips.Keys)}");
+            var mapping = new List<string>();
+            foreach (var pair in best) mapping.Add($"{pair.Key}={Path.GetFileNameWithoutExtension(pair.Value.Value)}");
+            mapping.AddRange(actionMapping);
+
+            Debug.Log($"[MP] INFO CHARACTER_CONTROLLER name={character.Name} " +
+                      $"clips={string.Join("/", clips.Keys)} mapping=[{string.Join(", ", mapping)}]");
             return controller;
         }
 
@@ -569,7 +577,12 @@ namespace MPBlocks.Editor
                                 || lower.Contains("swing") || lower.Contains("slash") || lower.Contains("shoot")
                                 || lower.Contains("fire") || lower.Contains("throw") || lower.Contains("wave")
                                 || lower.Contains("emote") || lower.Contains("dance") || lower.Contains("cast")
-                                || lower.Contains("die") || lower.Contains("death") || lower.Contains("hit");
+                                || lower.Contains("die") || lower.Contains("death") || lower.Contains("hit")
+                                || lower.Contains("push") || lower.Contains("press") || lower.Contains("button")
+                                || lower.Contains("interact") || lower.Contains("grab") || lower.Contains("pickup")
+                                || lower.Contains("sit") || lower.Contains("crouch") || lower.Contains("roll")
+                                || lower.Contains("block") || lower.Contains("dodge") || lower.Contains("salute")
+                                || lower.Contains("clap") || lower.Contains("point");
 
                 if (!isAction) continue;
 
