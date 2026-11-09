@@ -38,7 +38,8 @@ namespace MPBlocks.Editor
         [MenuItem("MPBlocks/Characters/Import from Assets/Character", false, 33)]
         public static void ImportFromMenu()
         {
-            var result = Import(silent: false);
+            // An explicit menu click means "regenerate", so hand edits in _Generated are replaced.
+            var result = Import(silent: false, force: true);
 
             EditorUtility.DisplayDialog("MPBlocks characters",
                 $"Characters found: {result.Found}\n" +
@@ -51,7 +52,7 @@ namespace MPBlocks.Editor
         /// <summary>Headless entry point: same work, no dialogs.</summary>
         public static void ImportForCI()
         {
-            var result = Import(silent: true);
+            var result = Import(silent: true, force: true);
             Debug.Log($"[MP] INFO CHARACTER_IMPORT_DONE found={result.Found} prefabs={result.PrefabsWritten} roster={result.RosterUpdated}");
             EditorApplication.Exit(result.Found > 0 ? 0 : 1);
         }
@@ -64,7 +65,7 @@ namespace MPBlocks.Editor
             public readonly List<string> Notes = new List<string>();
         }
 
-        public static Result Import(bool silent)
+        public static Result Import(bool silent, bool force = false)
         {
             var result = new Result();
 
@@ -99,7 +100,7 @@ namespace MPBlocks.Editor
 
             foreach (var character in characters)
             {
-                var prefab = BuildVisualPrefab(character, result);
+                var prefab = EnsureVisualPrefab(character, force, result);
                 if (prefab == null) continue;
 
                 result.PrefabsWritten++;
@@ -190,7 +191,22 @@ namespace MPBlocks.Editor
 
         // ---------------------------------------------------------------- prefab
 
-        private static GameObject BuildVisualPrefab(CharacterSource character, Result result)
+        private static GameObject EnsureVisualPrefab(CharacterSource character, bool force, Result result)
+        {
+            var prefabPath = $"{GeneratedFolder}/{character.Name}_Visual.prefab";
+            var controllerPath = $"{GeneratedFolder}/{character.Name}.controller";
+
+            if (!force
+                && AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath) != null
+                && AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath) != null)
+            {
+                return AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            }
+
+            return BuildVisualPrefab(character, force, result);
+        }
+
+        private static GameObject BuildVisualPrefab(CharacterSource character, bool force, Result result)
         {
             var model = AssetDatabase.LoadAssetAtPath<GameObject>(character.ModelPath);
             if (model == null) return null;
@@ -207,7 +223,7 @@ namespace MPBlocks.Editor
             var animator = instance.GetComponent<Animator>();
             if (animator == null) animator = instance.AddComponent<Animator>();
 
-            var controller = BuildController(character, result);
+            var controller = BuildController(character, force, result);
             if (controller != null) animator.runtimeAnimatorController = controller;
 
             // Movement is driven by the toolkit; root motion would fight the network transform.
@@ -252,7 +268,7 @@ namespace MPBlocks.Editor
 
         // ---------------------------------------------------------------- controller
 
-        private static AnimatorController BuildController(CharacterSource character, Result result)
+        private static AnimatorController BuildController(CharacterSource character, bool force, Result result)
         {
             var clips = new Dictionary<string, AnimationClip>(StringComparer.OrdinalIgnoreCase);
 
@@ -276,6 +292,11 @@ namespace MPBlocks.Editor
             }
 
             var controllerPath = $"{GeneratedFolder}/{character.Name}.controller";
+            if (!force && AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath) != null)
+            {
+                return AssetDatabase.LoadAssetAtPath<AnimatorController>(controllerPath);
+            }
+
             AssetDatabase.DeleteAsset(controllerPath);
 
             var controller = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
@@ -393,6 +414,8 @@ namespace MPBlocks.Editor
 
         private static int WriteRoster(CharacterRoster roster, List<CharacterEntry> entries, Result result)
         {
+            if (entries.Count == 0) return 0;
+
             var so = new SerializedObject(roster);
             var array = so.FindProperty("characters");
             if (array == null)
@@ -401,82 +424,47 @@ namespace MPBlocks.Editor
                 return 0;
             }
 
-            int updated = 0;
-            var used = new HashSet<int>();
+            // Rebuild the list instead of patching it: imported characters first, then any
+            // hand-authored entry that carries its own visual prefab. Colour-only placeholder
+            // capsules are dropped once real characters exist, otherwise the panel still shows
+            // a stray "Yellow" capsule next to the imported models.
+            var names = new List<string>();
+            var prefabs = new List<UnityEngine.Object>();
 
             foreach (var entry in entries)
             {
-                int index = FindEntry(array, entry.Name, used);
-                if (index < 0) index = FindPlaceholder(array, used);
-
-                if (index < 0)
-                {
-                    index = array.arraySize;
-                    array.arraySize = index + 1;
-                }
-
-                used.Add(index);
-
-                var element = array.GetArrayElementAtIndex(index);
-                var displayName = element.FindPropertyRelative("displayName");
-                if (displayName != null) displayName.stringValue = entry.Name;
-
-                var visualPrefab = element.FindPropertyRelative("visualPrefab");
-                if (visualPrefab != null) visualPrefab.objectReferenceValue = entry.Prefab;
-
-                updated++;
+                names.Add(entry.Name);
+                prefabs.Add(entry.Prefab);
             }
 
-            // Trim empty leftover slots so the panel does not show blanks.
-            for (int i = array.arraySize - 1; i >= 0; i--)
+            for (int i = 0; i < array.arraySize; i++)
             {
                 var element = array.GetArrayElementAtIndex(i);
-                var name = element.FindPropertyRelative("displayName");
-                var prefab = element.FindPropertyRelative("visualPrefab");
+                var displayName = element.FindPropertyRelative("displayName");
+                var visualPrefab = element.FindPropertyRelative("visualPrefab");
+                if (displayName == null || visualPrefab == null) continue;
 
-                if (prefab.objectReferenceValue != null) continue;
-                if (!string.IsNullOrEmpty(name.stringValue)) continue;
+                var name = displayName.stringValue;
+                var prefab = visualPrefab.objectReferenceValue;
+                if (prefab == null) continue;
+                if (names.Exists(existing => string.Equals(existing, name, StringComparison.OrdinalIgnoreCase))) continue;
 
-                array.DeleteArrayElementAtIndex(i);
+                names.Add(name);
+                prefabs.Add(prefab);
+            }
+
+            array.arraySize = names.Count;
+
+            for (int i = 0; i < names.Count; i++)
+            {
+                var element = array.GetArrayElementAtIndex(i);
+                element.FindPropertyRelative("displayName").stringValue = names[i];
+                element.FindPropertyRelative("visualPrefab").objectReferenceValue = prefabs[i];
             }
 
             so.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(roster);
-            return updated;
-        }
-
-        /// <summary>
-        /// An entry with no visual prefab is a colour-only placeholder written by
-        /// CharacterSelectSetup. Reuse those slots before appending, so importing three
-        /// characters does not leave four "Red/Blue/Green/Yellow" shells in the panel.
-        /// </summary>
-        private static int FindPlaceholder(SerializedProperty array, HashSet<int> used)
-        {
-            for (int i = 0; i < array.arraySize; i++)
-            {
-                if (used.Contains(i)) continue;
-
-                var prefab = array.GetArrayElementAtIndex(i).FindPropertyRelative("visualPrefab");
-                if (prefab != null && prefab.objectReferenceValue == null) return i;
-            }
-
-            return -1;
-        }
-
-        private static int FindEntry(SerializedProperty array, string name, HashSet<int> used)
-        {
-            for (int i = 0; i < array.arraySize; i++)
-            {
-                if (used.Contains(i)) continue;
-
-                var displayName = array.GetArrayElementAtIndex(i).FindPropertyRelative("displayName");
-                if (displayName != null && string.Equals(displayName.stringValue, name, StringComparison.OrdinalIgnoreCase))
-                {
-                    return i;
-                }
-            }
-
-            return -1;
+            return entries.Count;
         }
 
         private static void EnsureFolder(string path)

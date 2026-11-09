@@ -25,6 +25,16 @@ namespace MPBlocks.Editor
         public const string RosterPath = "Assets/Settings/CharacterRoster.asset";
 
         /// <summary>
+        /// Picks up anything under Assets/Character. Cheap when nothing changed: the importer
+        /// reuses existing generated prefabs and controllers unless it is forced.
+        /// </summary>
+        public static void ImportDroppedCharacters()
+        {
+            if (!AssetDatabase.IsValidFolder(CharacterImporter.SourceFolder)) return;
+            CharacterImporter.Import(silent: true, force: false);
+        }
+
+        /// <summary>
         /// Adds character selection to the open scene when it is missing. Idempotent, so the
         /// refresh menu can call it every time; returns true only when something was added.
         /// </summary>
@@ -91,11 +101,9 @@ namespace MPBlocks.Editor
             AssetDatabase.SaveAssets();
             Selection.activeGameObject = selector.gameObject;
 
-            // Dropped Mixamo folders become selectable characters in the same step.
-            if (AssetDatabase.IsValidFolder(CharacterImporter.SourceFolder))
-            {
-                CharacterImporter.Import(silent: true);
-            }
+            // Dropped Mixamo folders become selectable characters in the same step; without
+            // this the roster only ever offers the colour-only placeholder capsules.
+            ImportDroppedCharacters();
 
             Debug.Log("[MP] INFO CHARACTER_SELECT_ADDED roster=" + RosterPath + " scene=" + selector.gameObject.scene.name);
         }

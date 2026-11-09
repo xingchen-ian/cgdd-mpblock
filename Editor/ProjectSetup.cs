@@ -53,6 +53,7 @@ namespace MPBlocks.Editor
             // was generated (the name field). Additive only — no scene is rebuilt.
             SessionUIUpgrader.TryUpgradeActiveScene();
             CharacterSelectSetup.EnsureActiveScene();
+            CharacterSelectSetup.ImportDroppedCharacters();
 
             AssetDatabase.SaveAssets();
             Debug.Log("[MP] INFO SETUP_REFRESHED");
