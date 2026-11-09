@@ -26,6 +26,9 @@ namespace MPBlocks.Gameplay
         [Tooltip("Player camera; optional. OnNetworkSpawn enables it only on the client that owns this player so nobody sees multiple views; leave it empty and the camera is not managed.")]
         [SerializeField] private Camera playerCamera;
 
+        [Tooltip("Local-space position applied to the player camera on the owning client. (0,0,0) keeps the prefab's own value, which for a human-sized character model puts the camera inside its head. Try (0, 2.0, -3.5) for a third-person view.")]
+        [SerializeField] private Vector3 cameraOffset;
+
         private float _yaw;
         private Health _health;
 
@@ -37,6 +40,11 @@ namespace MPBlocks.Gameplay
             if (playerCamera != null)
             {
                 playerCamera.enabled = isOwner;
+
+                if (isOwner && cameraOffset != Vector3.zero)
+                {
+                    playerCamera.transform.localPosition = cameraOffset;
+                }
             }
 
             if (isOwner)

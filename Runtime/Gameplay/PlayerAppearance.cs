@@ -63,6 +63,21 @@ namespace MPBlocks.Gameplay
         /// <summary>Code-first: renderer tinted when the character has no visual prefab.</summary>
         public void SetBodyRenderer(Renderer value) => bodyRenderer = value;
 
+        /// <summary>
+        /// Picks the capsule to tint/hide. Prefers a child literally named "Body" so a chosen
+        /// character model (instantiated later, with its own SkinnedMeshRenderer) is never the
+        /// renderer that gets hidden.
+        /// </summary>
+        private Renderer FindBodyRenderer()
+        {
+            foreach (var candidate in GetComponentsInChildren<Renderer>(true))
+            {
+                if (candidate.gameObject.name == "Body") return candidate;
+            }
+
+            return GetComponentInChildren<Renderer>();
+        }
+
         /// <summary>Code-first: label used in [MP] log lines.</summary>
         public void SetLabel(string value) => label = value;
 
@@ -72,7 +87,7 @@ namespace MPBlocks.Gameplay
             _roster = bootstrap != null && bootstrap.Config != null ? bootstrap.Config.CharacterRoster : null;
 
             if (visualRoot == null) visualRoot = transform;
-            if (bodyRenderer == null) bodyRenderer = GetComponentInChildren<Renderer>();
+            if (bodyRenderer == null) bodyRenderer = FindBodyRenderer();
 
             _character.OnValueChanged += HandleCharacterChanged;
 
