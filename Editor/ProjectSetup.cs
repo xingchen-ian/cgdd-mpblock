@@ -554,6 +554,12 @@ namespace MPBlocks.Editor
             var trigger = root.AddComponent<PlayerActionTrigger>();
             var so = new SerializedObject(trigger);
             SetIfEmpty(so, "syncedAnimator", root.GetComponent<SyncedAnimator>());
+
+            // Empty means "use the first trigger the controller declares", so a character whose
+            // action is called ButtonPushing or Shoot works without editing the Inspector.
+            var parameter = so.FindProperty("actionParameter");
+            if (parameter != null) parameter.stringValue = string.Empty;
+
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 

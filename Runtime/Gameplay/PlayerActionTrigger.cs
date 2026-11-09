@@ -56,7 +56,9 @@ namespace MPBlocks.Gameplay
                 return;
             }
 
-            if (IsOwner && string.IsNullOrEmpty(actionParameter)) actionParameter = FirstTrigger();
+            if (IsOwner && !HasAction(actionParameter)) actionParameter = FirstTrigger();
+
+            MPLog.Info("ACTION_READY", ("label", label), ("action", actionParameter));
         }
 
         private void Update()
@@ -68,12 +70,33 @@ namespace MPBlocks.Gameplay
             if (Time.time < _nextAllowed) return;
             if (!Input.GetKeyDown(key)) return;
 
-            if (string.IsNullOrEmpty(actionParameter)) actionParameter = FirstTrigger();
+            if (!HasAction(actionParameter)) actionParameter = FirstTrigger();
             if (string.IsNullOrEmpty(actionParameter)) return;
 
             _nextAllowed = Time.time + Mathf.Max(0f, cooldown);
             syncedAnimator.SetTrigger(actionParameter);
             MPLog.Info("PLAYER_ACTION", ("label", label), ("clientId", OwnerClientId), ("action", actionParameter));
+        }
+
+        /// <summary>True when the animator actually declares this trigger; "Attack" on a controller without it must not be silent.</summary>
+        private bool HasAction(string parameter)
+        {
+            if (string.IsNullOrEmpty(parameter)) return false;
+
+            var animator = syncedAnimator != null ? syncedAnimator.Animator : null;
+            if (animator == null) return false;
+
+            int hash = Animator.StringToHash(parameter);
+            foreach (var candidate in animator.parameters)
+            {
+                if (candidate.type == AnimatorControllerParameterType.Trigger && candidate.nameHash == hash) return true;
+            }
+
+            MPLog.Warn("ACTION_TRIGGER_MISSING",
+                ("label", label),
+                ("parameter", parameter),
+                ("hint", "the controller has no such trigger; falling back to the first one"));
+            return false;
         }
 
         private string FirstTrigger()

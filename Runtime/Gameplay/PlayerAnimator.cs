@@ -69,6 +69,7 @@ namespace MPBlocks.Gameplay
         private bool _hasMoveZ;
         private bool _hasGrounded;
         private float _smoothedSpeed;
+        private float _groundProbeOffset = 0.1f;
         private Transform _rootBone;
         private Vector3 _rootBoneBind;
         private Vector3 _lastPosition;
@@ -113,7 +114,8 @@ namespace MPBlocks.Gameplay
                 ("label", label),
                 ("clientId", OwnerClientId),
                 ("animator", animator != null ? animator.name : "none"),
-                ("rootBone", _rootBone != null ? _rootBone.name : "none"));
+                ("rootBone", _rootBone != null ? _rootBone.name : "none"),
+                ("groundProbe", _groundProbeOffset));
         }
 
         public override void OnNetworkDespawn()
@@ -139,6 +141,7 @@ namespace MPBlocks.Gameplay
             _hasMoveX = false;
             _hasMoveZ = false;
 
+            ComputeGroundProbe();
             BindRootBone();
 
             if (animator == null) return;
@@ -218,11 +221,27 @@ namespace MPBlocks.Gameplay
             _rootBone.localPosition = new Vector3(_rootBoneBind.x, position.y, _rootBoneBind.z);
         }
 
+        /// <summary>
+        /// A rigidbody player's origin sits at the capsule centre, so a probe 0.1 m above it never
+        /// reaches the ground and "Grounded" stayed false forever — which pinned the rig in the
+        /// Jump state. Start the probe just above the capsule's bottom instead.
+        /// </summary>
+        private void ComputeGroundProbe()
+        {
+            _groundProbeOffset = 0.1f;
+
+            var capsule = GetComponent<CapsuleCollider>();
+            if (capsule == null) return;
+
+            _groundProbeOffset = capsule.center.y - capsule.height * 0.5f + 0.1f;
+        }
+
         private void Update()
         {
             // The owner drives the animation; remote copies read the values replicated by
             // SyncedAnimator instead of trying to simulate input.
             if (!IsSpawned || !IsOwner) return;
+            ComputeGroundProbe();
             BindRootBone();
 
             if (animator == null) return;
@@ -247,7 +266,7 @@ namespace MPBlocks.Gameplay
             if (_hasGrounded)
             {
                 bool grounded = Physics.Raycast(
-                    transform.position + Vector3.up * 0.1f,
+                    transform.position + Vector3.up * _groundProbeOffset,
                     Vector3.down,
                     Mathf.Max(0.05f, groundCheckDistance),
                     groundMask,
