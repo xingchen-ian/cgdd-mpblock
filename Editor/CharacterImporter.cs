@@ -211,16 +211,19 @@ namespace MPBlocks.Editor
             var model = AssetDatabase.LoadAssetAtPath<GameObject>(character.ModelPath);
             if (model == null) return null;
 
-            var instance = (GameObject)PrefabUtility.InstantiatePrefab(model);
-            if (instance == null) return null;
-
+            // A plain Instantiate, not InstantiatePrefab: a nested FBX instance keeps the skeleton
+            // one level below the Animator, and generic animation clips (bone paths are relative
+            // to the Animator) then bind to nothing. A real copy keeps the model root = Animator.
+            var instance = UnityEngine.Object.Instantiate(model);
             instance.name = character.Name + "_Visual";
             instance.transform.position = Vector3.zero;
             instance.transform.rotation = Quaternion.identity;
 
             StripGameplay(instance);
+            FixMaterials(instance, character.Name, result);
 
             var animator = instance.GetComponent<Animator>();
+            if (animator == null) animator = instance.GetComponentInChildren<Animator>(true);
             if (animator == null) animator = instance.AddComponent<Animator>();
 
             var controller = BuildController(character, force, result);
@@ -230,6 +233,12 @@ namespace MPBlocks.Editor
             animator.applyRootMotion = false;
 
             var prefabPath = $"{GeneratedFolder}/{character.Name}_Visual.prefab";
+            AssetDatabase.DeleteAsset(prefabPath);
+
+            // Read what the log needs before the instance is destroyed.
+            var animatorName = animator.gameObject.name;
+            var controllerName = controller != null ? controller.name : "none";
+
             var prefab = PrefabUtility.SaveAsPrefabAsset(instance, prefabPath);
             UnityEngine.Object.DestroyImmediate(instance);
 
@@ -239,7 +248,89 @@ namespace MPBlocks.Editor
                 return null;
             }
 
+            Debug.Log($"[MP] INFO CHARACTER_VISUAL name={character.Name} animator={animatorName} controller={controllerName}");
             return prefab;
+        }
+
+        /// <summary>
+        /// Mixamo materials use the built-in "Standard" shader. In a URP project that renders as
+        /// magenta, which reads as "material lost". Replace unsupported or missing materials with
+        /// a lit material of the active pipeline, keeping the original colour when there is one.
+        /// </summary>
+        private static void FixMaterials(GameObject root, string characterName, Result result)
+        {
+            bool srp = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline != null;
+            var shader = srp ? Shader.Find("Universal Render Pipeline/Lit") : null;
+            if (shader == null) shader = Shader.Find("Standard");
+            if (shader == null)
+            {
+                result.Notes.Add($"{characterName}: no usable shader found for materials.");
+                return;
+            }
+
+            int replaced = 0;
+            int slot = 0;
+
+            foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                var materials = renderer.sharedMaterials;
+                bool changed = false;
+
+                for (int i = 0; i < materials.Length; i++)
+                {
+                    var material = materials[i];
+                    if (material != null && material.shader != null
+                        && material.shader.isSupported
+                        && !(srp && IsBuiltInOnlyShader(material.shader)))
+                    {
+                        continue;
+                    }
+
+                    materials[i] = CreateMaterial(shader, material, characterName, slot++, srp);
+                    changed = true;
+                    replaced++;
+                }
+
+                if (changed) renderer.sharedMaterials = materials;
+            }
+
+            if (replaced > 0)
+            {
+                result.Notes.Add($"{characterName}: replaced {replaced} unsupported material(s) for {shader.name}.");
+                Debug.Log($"[MP] INFO CHARACTER_MATERIAL name={characterName} replaced={replaced} shader={shader.name}");
+            }
+        }
+
+        /// <summary>Shaders that render as magenta under URP/HDRP even when isSupported says true.</summary>
+        private static bool IsBuiltInOnlyShader(Shader shader)
+        {
+            var name = shader.name;
+            return name == "Standard" || name.StartsWith("Standard ", StringComparison.Ordinal)
+                   || name.StartsWith("Legacy Shaders/", StringComparison.Ordinal)
+                   || name == "Diffuse" || name == "Specular" || name == "VertexLit";
+        }
+
+        private static Material CreateMaterial(Shader shader, Material original, string characterName, int slot, bool srp)
+        {
+            var material = new Material(shader) { name = $"{characterName}_Mat{slot}" };
+
+            var color = Color.white;
+            if (original != null)
+            {
+                if (original.HasProperty("_BaseColor")) color = original.GetColor("_BaseColor");
+                else if (original.HasProperty("_Color")) color = original.GetColor("_Color");
+            }
+
+            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
+            if (material.HasProperty("_Color")) material.SetColor("_Color", color);
+
+            if (srp && material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", 0.2f);
+
+            EnsureFolder(GeneratedFolder + "/Materials");
+            var path = $"{GeneratedFolder}/Materials/{characterName}_Mat{slot}.mat";
+            AssetDatabase.DeleteAsset(path);
+            AssetDatabase.CreateAsset(material, path);
+            return material;
         }
 
         /// <summary>A character visual must not carry physics, cameras or lights — those belong to the player object.</summary>
