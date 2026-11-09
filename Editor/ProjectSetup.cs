@@ -186,6 +186,31 @@ namespace MPBlocks.Editor
         /// (Speed plus the MoveX/MoveZ direction pair). This makes Refresh Project Setup upgrade
         /// a player prefab that was built before directional animation existed.
         /// </summary>
+        /// <summary>
+        /// True when the prefab is missing anything EnsurePlayerExtras adds. Both player prefabs
+        /// (Transform and Rigidbody) share this, so an older project gets every new component on
+        /// one Refresh Project Setup instead of staying half upgraded.
+        /// </summary>
+        private static bool NeedsExtrasUpgrade(GameObject prefab)
+        {
+            return prefab.GetComponent<StateHash>() == null
+                   || prefab.GetComponent<Health>() == null
+                   || prefab.GetComponent<HealthHUD>() == null
+                   || prefab.GetComponent<PlayerInteractor>() == null
+                   || prefab.GetComponent<PlayerAppearance>() == null
+                   || prefab.GetComponent<PlayerPrivateState>() == null
+                   || prefab.GetComponent<SyncedString>() == null
+                   || prefab.GetComponent<Team>() == null
+                   || prefab.GetComponent<PlayerNameTag>() == null
+                   || prefab.GetComponent<PlayerNameplate>() == null
+                   || prefab.GetComponent<PlayerAnimator>() == null
+                   || prefab.GetComponent<SyncedAnimator>() == null
+                   || prefab.GetComponent<AudioOneShot>() == null
+                   || prefab.GetComponent<TargetedNetEvent>() == null
+                   || prefab.transform.Find("HoldPoint") == null
+                   || !AnimationRigUpToDate(prefab);
+        }
+
         private static bool AnimationRigUpToDate(GameObject prefab)
         {
             var synced = prefab.GetComponent<SyncedAnimator>();
@@ -336,7 +361,8 @@ namespace MPBlocks.Editor
                                     || existing.GetComponent<HealthHUD>() == null
                                     || existing.GetComponent<PlayerInteractor>() == null
                                     || existing.GetComponent<PlayerAppearance>() == null
-                                    || existing.GetComponent<Rigidbody>().constraints != RigidbodyConstraints.FreezeRotation;
+                                    || existing.GetComponent<Rigidbody>().constraints != RigidbodyConstraints.FreezeRotation
+                                    || NeedsExtrasUpgrade(existing);
 
                 if (!needsUpgrade)
                 {
@@ -360,6 +386,8 @@ namespace MPBlocks.Editor
                 ConfigureCapsule(contentCapsule);
 
                 if (contents.GetComponent<RigidbodyPlayerMover>() == null) contents.AddComponent<RigidbodyPlayerMover>();
+
+                EnsurePlayerExtras(contents);
 
                 PrefabUtility.SaveAsPrefabAsset(contents, RigidbodyPlayerPrefabPath);
                 PrefabUtility.UnloadPrefabContents(contents);
