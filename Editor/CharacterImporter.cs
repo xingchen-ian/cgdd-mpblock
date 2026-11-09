@@ -461,7 +461,10 @@ namespace MPBlocks.Editor
             // state, so "drop attack.fbx in the folder and press F" works without scripting.
             var actionMapping = new List<string>();
 
-            foreach (var action in FindActions(character))
+            var locomotionFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var pair in best) locomotionFiles.Add(pair.Value.Value);
+
+            foreach (var action in FindActions(character, locomotionFiles))
             {
                 var clip = LoadFirstClip(action.Value);
                 if (clip == null) continue;
@@ -559,40 +562,78 @@ namespace MPBlocks.Editor
                 "Speed");
         }
 
+        private static readonly string[] SlotPrefixes =
+        {
+            "idle", "walk", "run", "jump", "left", "right", "back",
+        };
+
+        private static readonly string[] ActionPrefixes = { "act_", "action_", "a_" };
+
+        private static readonly string[] IgnoredWords =
+        {
+            "turn", "pose", "tpose", "t-pose", "bind", "preview", "mixamo",
+        };
+
+        private static bool IsActionPrefix(string lowerName)
+        {
+            foreach (var prefix in ActionPrefixes)
+            {
+                if (lowerName.StartsWith(prefix, StringComparison.Ordinal)) return true;
+            }
+
+            return false;
+        }
+
         /// <summary>
-        /// Clips whose names describe a one-shot action. Everything here becomes a Trigger
-        /// parameter plus a state, played with SyncedAnimator.SetTrigger.
+        /// Every animation clip that is not already a locomotion slot becomes a one-shot action.
+        /// The old behaviour used a keyword allowlist, so a perfectly ordinary clip called
+        /// "Shoot" or "Taunt" was silently dropped; a denylist of pose/turn clips is the safer
+        /// default because naming an action is the student's decision, not ours.
         /// </summary>
-        private static List<KeyValuePair<string, string>> FindActions(CharacterSource character)
+        private static List<KeyValuePair<string, string>> FindActions(
+            CharacterSource character, ICollection<string> locomotionFiles)
         {
             var actions = new List<KeyValuePair<string, string>>();
             var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var file in character.AnimationFiles)
             {
+                if (locomotionFiles.Contains(file)) continue;
+
                 var stem = Path.GetFileNameWithoutExtension(file);
                 var lower = stem.ToLowerInvariant();
 
-                bool isAction = lower.Contains("attack") || lower.Contains("punch") || lower.Contains("kick")
-                                || lower.Contains("swing") || lower.Contains("slash") || lower.Contains("shoot")
-                                || lower.Contains("fire") || lower.Contains("throw") || lower.Contains("wave")
-                                || lower.Contains("emote") || lower.Contains("dance") || lower.Contains("cast")
-                                || lower.Contains("die") || lower.Contains("death") || lower.Contains("hit")
-                                || lower.Contains("push") || lower.Contains("press") || lower.Contains("button")
-                                || lower.Contains("interact") || lower.Contains("grab") || lower.Contains("pickup")
-                                || lower.Contains("sit") || lower.Contains("crouch") || lower.Contains("roll")
-                                || lower.Contains("block") || lower.Contains("dodge") || lower.Contains("salute")
-                                || lower.Contains("clap") || lower.Contains("point");
+                if (IsIgnored(lower)) continue;
 
-                if (!isAction) continue;
-
-                var name = ToPascalCase(stem);
+                var name = ActionNameFor(stem);
                 if (string.IsNullOrEmpty(name) || !used.Add(name)) continue;
 
                 actions.Add(new KeyValuePair<string, string>(name, file));
             }
 
             return actions;
+        }
+
+        private static bool IsIgnored(string lowerName)
+        {
+            foreach (var word in IgnoredWords)
+            {
+                if (lowerName.Contains(word, StringComparison.Ordinal)) return true;
+            }
+
+            return false;
+        }
+
+        private static string ActionNameFor(string stem)
+        {
+            var lower = stem.ToLowerInvariant();
+
+            foreach (var prefix in ActionPrefixes)
+            {
+                if (lower.StartsWith(prefix, StringComparison.Ordinal)) return ToPascalCase(stem.Substring(prefix.Length));
+            }
+
+            return ToPascalCase(stem);
         }
 
         private static string ToPascalCase(string value)
@@ -636,7 +677,20 @@ namespace MPBlocks.Editor
         /// </summary>
         private static (string key, int priority) ClassifyAnimation(string fileName)
         {
-            var name = fileName.ToLowerInvariant();
+            var name = fileName.ToLowerInvariant().Trim();
+
+            // Explicit prefixes always win: "walk_shoot" is a shoot clip, "idle_sit" is idle.
+            foreach (var slot in SlotPrefixes)
+            {
+                if (name.StartsWith(slot + "_") || name.StartsWith(slot + " ") || name.StartsWith(slot + "-"))
+                {
+                    return (slot, 0);
+                }
+            }
+
+            // "act_", "a_" or "action_" force a one-shot action, even if the name also contains a
+            // locomotion word.
+            if (IsActionPrefix(name)) return (null, int.MaxValue);
             bool strafe = name.Contains("strafe");
             bool turn = name.Contains("turn");
 
