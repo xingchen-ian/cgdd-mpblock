@@ -17,6 +17,12 @@ namespace MPBlocks.Gameplay
     [RequireComponent(typeof(NetworkObject))]
     public sealed class SimplePlayerMover : NetworkBehaviour
     {
+        [Tooltip("Speed while Shift is held, in metres per second.")]
+        [SerializeField] private float runSpeed = 4.5f;
+
+        [Tooltip("Hold this key to use Run Speed.")]
+        [SerializeField] private KeyCode runKey = KeyCode.LeftShift;
+
         [Tooltip("Local player movement speed in metres per second, default 4.5. Input is read only on the client that owns this player and other machines have no input; tune the feel here rather than editing the sync blocks.")]
         [SerializeField] private float moveSpeed = 4.5f;
 
@@ -66,7 +72,8 @@ namespace MPBlocks.Gameplay
             {
                 var move = transform.right * x + transform.forward * z;
                 if (move.sqrMagnitude > 1f) move.Normalize();
-                transform.position += move * (moveSpeed * Time.deltaTime);
+                float speed = Input.GetKey(runKey) ? Mathf.Max(moveSpeed, runSpeed) : moveSpeed;
+                transform.position += move * (speed * Time.deltaTime);
             }
 
             if (Input.GetMouseButton(1))

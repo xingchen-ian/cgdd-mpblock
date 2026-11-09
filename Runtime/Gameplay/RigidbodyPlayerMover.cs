@@ -32,6 +32,12 @@ namespace MPBlocks.Gameplay
         [SerializeField] private string label = "player";
 
         [Header("Movement")]
+        [Tooltip("Speed while Shift is held, in metres per second. The animation switches to Run above about 2.5 m/s.")]
+        [SerializeField] private float runSpeed = 4.5f;
+
+        [Tooltip("Hold this key to use Run Speed.")]
+        [SerializeField] private KeyCode runKey = KeyCode.LeftShift;
+
         [Tooltip("Horizontal speed in metres per second at full input. Applied in FixedUpdate; vertical velocity (gravity/jump) is preserved.")]
         [SerializeField] private float moveSpeed = 5f;
 
@@ -165,8 +171,10 @@ namespace MPBlocks.Gameplay
             var direction = rotation * new Vector3(x, 0f, z);
             if (direction.sqrMagnitude > 1f) direction.Normalize();
 
+            float speed = Input.GetKey(runKey) ? Mathf.Max(moveSpeed, runSpeed) : moveSpeed;
+
             var velocity = _body.velocity;
-            _body.velocity = new Vector3(direction.x * moveSpeed, velocity.y, direction.z * moveSpeed);
+            _body.velocity = new Vector3(direction.x * speed, velocity.y, direction.z * speed);
 
             // Only touch rotation when the mouse actually changed the yaw. Continuously
             // re-writing the rotation while in contact with a collider fights the contact
@@ -185,7 +193,7 @@ namespace MPBlocks.Gameplay
             _jumpQueued = false;
             if (!_grounded) return;
 
-            _body.velocity = new Vector3(direction.x * moveSpeed, jumpSpeed, direction.z * moveSpeed);
+            _body.velocity = new Vector3(direction.x * speed, jumpSpeed, direction.z * speed);
         }
     }
 }

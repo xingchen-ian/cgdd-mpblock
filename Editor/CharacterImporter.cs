@@ -614,6 +614,12 @@ namespace MPBlocks.Editor
             return actions;
         }
 
+        /// <summary>True when the name is exactly this word (ignoring spaces), i.e. a plain slot clip.</summary>
+        private static bool IsPlain(string lowerName, string word)
+        {
+            return lowerName.Replace(" ", string.Empty) == word;
+        }
+
         private static bool IsIgnored(string lowerName)
         {
             foreach (var word in IgnoredWords)
@@ -704,10 +710,19 @@ namespace MPBlocks.Editor
             if (strafe && name.Contains("left")) return ("left", name.Contains("walking") ? 1 : 0);
             if (strafe && name.Contains("right")) return ("right", name.Contains("walking") ? 1 : 0);
 
+            // "Walking Push" contains "walk" but is an action: a clip only fills a locomotion
+            // slot when nothing plainer exists. Plain names ("walking", "walk") win outright.
+            if (!IsPlain(name, "idle") && name.Contains("idle")) return ("idle", 2);
             if (name.Contains("idle")) return ("idle", 0);
-            if (name.Contains("stand")) return ("idle", 1);
+            if (!IsPlain(name, "walk") && !IsPlain(name, "walking") && name.Contains("walk")) return ("walk", 2);
             if (name.Contains("walk")) return ("walk", 0);
+            if (!IsPlain(name, "run") && !IsPlain(name, "running") && (name.Contains("run") || name.Contains("jog")))
+            {
+                return ("run", 2);
+            }
+
             if (name.Contains("run") || name.Contains("jog")) return ("run", 0);
+            if (!IsPlain(name, "jump") && !IsPlain(name, "jumping") && name.Contains("jump")) return ("jump", 2);
             if (name.Contains("jump")) return ("jump", 0);
 
             return (null, int.MaxValue);

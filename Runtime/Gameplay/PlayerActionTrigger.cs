@@ -27,8 +27,17 @@ namespace MPBlocks.Gameplay
         [Tooltip("Animator bridge that replicates the trigger.")]
         [SerializeField] private SyncedAnimator syncedAnimator;
 
-        [Tooltip("Trigger parameter to fire. Leave empty to use the first trigger in the controller.")]
-        [SerializeField] private string actionParameter = "Attack";
+        [Tooltip("Trigger parameter to fire when Bind All Triggers is off. Leave empty to use the first trigger in the controller.")]
+        [SerializeField] private string actionParameter;
+
+        [Tooltip("Bind every trigger the controller declares to its own key (F, G, H, ...), so a character with several actions is playable without extra components.")]
+        [SerializeField] private bool bindAllTriggers = true;
+
+        [Tooltip("Keys used when Bind All Triggers is on, in controller order.")]
+        [SerializeField] private KeyCode[] keys =
+        {
+            KeyCode.F, KeyCode.G, KeyCode.H, KeyCode.T, KeyCode.Y, KeyCode.U,
+        };
 
         [Tooltip("Key that fires the action.")]
         [SerializeField] private KeyCode key = KeyCode.F;
@@ -41,6 +50,7 @@ namespace MPBlocks.Gameplay
 
         private Health _health;
         private float _nextAllowed;
+        private string[] _boundActions = System.Array.Empty<string>();
 
         /// <summary>Trigger this component fires, resolved on spawn.</summary>
         public string ActionParameter => actionParameter;
@@ -56,9 +66,9 @@ namespace MPBlocks.Gameplay
                 return;
             }
 
-            if (IsOwner && !HasAction(actionParameter)) actionParameter = FirstTrigger();
+            if (!IsOwner) return;
 
-            MPLog.Info("ACTION_READY", ("label", label), ("action", actionParameter));
+            ResolveActions();
         }
 
         private void Update()
@@ -66,16 +76,71 @@ namespace MPBlocks.Gameplay
             if (!IsSpawned || !IsOwner) return;
             if (syncedAnimator == null) return;
 
+            // The character model is instantiated after the player object, so the controller's
+            // triggers may not exist yet on the first frames.
+            if (_boundActions.Length == 0) ResolveActions();
+            if (_boundActions.Length == 0) return;
+
             if (ignoreWhenDead && _health != null && _health.IsDead) return;
             if (Time.time < _nextAllowed) return;
-            if (!Input.GetKeyDown(key)) return;
 
-            if (!HasAction(actionParameter)) actionParameter = FirstTrigger();
-            if (string.IsNullOrEmpty(actionParameter)) return;
+            if (bindAllTriggers)
+            {
+                for (int i = 0; i < _boundActions.Length && i < keys.Length; i++)
+                {
+                    if (!Input.GetKeyDown(keys[i])) continue;
+
+                    Fire(_boundActions[i]);
+                    return;
+                }
+
+                return;
+            }
+
+            if (!Input.GetKeyDown(key)) return;
+            Fire(_boundActions[0]);
+        }
+
+        private void Fire(string action)
+        {
+            if (string.IsNullOrEmpty(action)) return;
 
             _nextAllowed = Time.time + Mathf.Max(0f, cooldown);
-            syncedAnimator.SetTrigger(actionParameter);
-            MPLog.Info("PLAYER_ACTION", ("label", label), ("clientId", OwnerClientId), ("action", actionParameter));
+            syncedAnimator.SetTrigger(action);
+            MPLog.Info("PLAYER_ACTION", ("label", label), ("clientId", OwnerClientId), ("action", action));
+        }
+
+        /// <summary>Rebuilds the action list from the controller's trigger parameters.</summary>
+        private void ResolveActions()
+        {
+            var animator = syncedAnimator != null ? syncedAnimator.Animator : null;
+            if (animator == null) return;
+
+            var all = new System.Collections.Generic.List<string>();
+            foreach (var parameter in animator.parameters)
+            {
+                if (parameter.type == AnimatorControllerParameterType.Trigger) all.Add(parameter.name);
+            }
+
+            if (bindAllTriggers)
+            {
+                _boundActions = all.ToArray();
+            }
+            else
+            {
+                var single = HasAction(actionParameter) ? actionParameter : FirstTrigger();
+                _boundActions = string.IsNullOrEmpty(single) ? System.Array.Empty<string>() : new[] { single };
+            }
+
+            if (_boundActions.Length == 0) return;
+
+            var bindings = new System.Collections.Generic.List<string>();
+            for (int i = 0; i < _boundActions.Length; i++)
+            {
+                bindings.Add($"{(i < keys.Length ? keys[i].ToString() : "?")}:{_boundActions[i]}");
+            }
+
+            MPLog.Info("ACTION_READY", ("label", label), ("bindings", string.Join(",", bindings)));
         }
 
         /// <summary>True when the animator actually declares this trigger; "Attack" on a controller without it must not be silent.</summary>
