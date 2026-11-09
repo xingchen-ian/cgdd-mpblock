@@ -51,6 +51,9 @@ namespace MPBlocks.Gameplay
         [Tooltip("Camera enabled only on the owning client. May be left empty when the camera is handled elsewhere.")]
         [SerializeField] private Camera playerCamera;
 
+        [Tooltip("Local-space position applied to the player camera on the owning client. (0,0,0) keeps the prefab value, which for a human character puts the camera inside its head. Try (0, 2.0, -3.5) for third person.")]
+        [SerializeField] private Vector3 cameraOffset;
+
         private Rigidbody _body;
         private Health _health;
         private float _yaw;
@@ -119,7 +122,11 @@ namespace MPBlocks.Gameplay
             _appliedYaw = _yaw;
             _body.rotation = Quaternion.Euler(0f, _yaw, 0f);
 
-            if (playerCamera != null) playerCamera.enabled = true;
+            if (playerCamera != null)
+            {
+                playerCamera.enabled = true;
+                if (cameraOffset != Vector3.zero) playerCamera.transform.localPosition = cameraOffset;
+            }
 
             MPLog.Info("RIGIDBODY_PLAYER_READY", ("label", label), ("clientId", OwnerClientId));
         }

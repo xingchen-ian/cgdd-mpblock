@@ -51,6 +51,9 @@ namespace MPBlocks.Gameplay
         [Tooltip("How quickly the speed parameter follows the measured speed (higher = snappier).")]
         [SerializeField] private float speedSmoothing = 12f;
 
+        [Tooltip("Root bone whose horizontal motion is locked after every animation frame, so a clip can never slide the model away from the player object (and its camera). Mixamo names it mixamorig:Hips; leave empty to disable.")]
+        [SerializeField] private string rootBoneName = "mixamorig:Hips";
+
         [Tooltip("Layers counted as ground for the grounded parameter.")]
         [SerializeField] private LayerMask groundMask = ~0;
 
@@ -66,6 +69,8 @@ namespace MPBlocks.Gameplay
         private bool _hasMoveZ;
         private bool _hasGrounded;
         private float _smoothedSpeed;
+        private Transform _rootBone;
+        private Vector3 _rootBoneBind;
         private Vector3 _lastPosition;
         private bool _hasLastPosition;
 
@@ -107,7 +112,8 @@ namespace MPBlocks.Gameplay
             MPLog.Info("PLAYER_ANIMATOR_READY",
                 ("label", label),
                 ("clientId", OwnerClientId),
-                ("animator", animator != null ? animator.name : "none"));
+                ("animator", animator != null ? animator.name : "none"),
+                ("rootBone", _rootBone != null ? _rootBone.name : "none"));
         }
 
         public override void OnNetworkDespawn()
@@ -133,6 +139,8 @@ namespace MPBlocks.Gameplay
             _hasMoveX = false;
             _hasMoveZ = false;
 
+            BindRootBone();
+
             if (animator == null) return;
 
             _speedHash = Animator.StringToHash(speedParameter);
@@ -149,11 +157,74 @@ namespace MPBlocks.Gameplay
             }
         }
 
+        /// <summary>
+        /// Finds the hip bone and remembers its rest position. Humanoid clips can still carry
+        /// horizontal translation on that bone even with root motion disabled and the clip
+        /// baked, which is what makes a character wander out of the camera view.
+        /// </summary>
+        private void BindRootBone()
+        {
+            _rootBone = null;
+            if (string.IsNullOrEmpty(rootBoneName) || animator == null) return;
+
+            foreach (var candidate in animator.GetComponentsInChildren<Transform>(true))
+            {
+                if (candidate.name == rootBoneName)
+                {
+                    _rootBone = candidate;
+                    break;
+                }
+            }
+
+            if (_rootBone == null)
+            {
+                foreach (var candidate in animator.GetComponentsInChildren<Transform>(true))
+                {
+                    if (candidate.name.EndsWith("Hips", System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        _rootBone = candidate;
+                        break;
+                    }
+                }
+            }
+
+            if (_rootBone == null) return;
+
+            // Prefer the avatar's bind pose over the current animated pose: locking to a
+            // mid-animation offset would pin the character slightly off centre forever.
+            _rootBoneBind = _rootBone.localPosition;
+
+            var avatar = animator.avatar;
+            if (avatar != null)
+            {
+                var skeleton = avatar.humanDescription.skeleton;
+                for (int i = 0; i < skeleton.Length; i++)
+                {
+                    if (skeleton[i].name != _rootBone.name) continue;
+                    _rootBoneBind = skeleton[i].position;
+                    break;
+                }
+            }
+        }
+
+        /// <summary>Runs after the Animator evaluated, so the correction wins for this frame.</summary>
+        private void LateUpdate()
+        {
+            if (_rootBone == null) return;
+
+            var position = _rootBone.localPosition;
+            if (Mathf.Approximately(position.x, _rootBoneBind.x) && Mathf.Approximately(position.z, _rootBoneBind.z)) return;
+
+            _rootBone.localPosition = new Vector3(_rootBoneBind.x, position.y, _rootBoneBind.z);
+        }
+
         private void Update()
         {
             // The owner drives the animation; remote copies read the values replicated by
             // SyncedAnimator instead of trying to simulate input.
             if (!IsSpawned || !IsOwner) return;
+            BindRootBone();
+
             if (animator == null) return;
 
             float speed = 0f;
