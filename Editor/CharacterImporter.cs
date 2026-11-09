@@ -259,9 +259,15 @@ namespace MPBlocks.Editor
         /// </summary>
         private static void FixMaterials(GameObject root, string characterName, Result result)
         {
-            bool srp = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline != null;
-            var shader = srp ? Shader.Find("Universal Render Pipeline/Lit") : null;
-            if (shader == null) shader = Shader.Find("Standard");
+            // GraphicsSettings.currentRenderPipeline is null during batch imports, which made
+            // an earlier version think a URP project was built-in and skip the replacement.
+            // Ask the shader catalogue instead.
+            var urpLit = Shader.Find("Universal Render Pipeline/Lit");
+            var hdrpLit = Shader.Find("HDRP/Lit");
+            bool srp = urpLit != null || hdrpLit != null
+                       || UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline != null;
+
+            var shader = urpLit != null ? urpLit : hdrpLit != null ? hdrpLit : Shader.Find("Standard");
             if (shader == null)
             {
                 result.Notes.Add($"{characterName}: no usable shader found for materials.");
@@ -296,8 +302,14 @@ namespace MPBlocks.Editor
 
             if (replaced > 0)
             {
+                var first = root.GetComponentInChildren<Renderer>(true);
+                var tint = first != null && first.sharedMaterial != null && first.sharedMaterial.HasProperty("_BaseColor")
+                    ? first.sharedMaterial.GetColor("_BaseColor")
+                    : Color.white;
+
                 result.Notes.Add($"{characterName}: replaced {replaced} unsupported material(s) for {shader.name}.");
-                Debug.Log($"[MP] INFO CHARACTER_MATERIAL name={characterName} replaced={replaced} shader={shader.name}");
+                Debug.Log($"[MP] INFO CHARACTER_MATERIAL name={characterName} replaced={replaced} " +
+                          $"shader={shader.name} color=#{ColorUtility.ToHtmlStringRGB(tint)}");
             }
         }
 
@@ -363,16 +375,34 @@ namespace MPBlocks.Editor
         {
             var clips = new Dictionary<string, AnimationClip>(StringComparer.OrdinalIgnoreCase);
 
+            // Several files can match the same slot ("walking.fbx" and "left strafe walking.fbx").
+            // Keep the plainest one: strafes and turns are variants, not the locomotion clip.
+            var best = new Dictionary<string, KeyValuePair<int, string>>();
+
             foreach (var file in character.AnimationFiles)
             {
+                var match = ClassifyAnimation(Path.GetFileNameWithoutExtension(file));
+                if (match.key == null) continue;
+
+                if (!best.TryGetValue(match.key, out var existing) || match.priority < existing.Key)
+                {
+                    best[match.key] = new KeyValuePair<int, string>(match.priority, file);
+                }
+            }
+
+            foreach (var pair in best)
+            {
+                var key = pair.Key;
+                var file = pair.Value.Value;
+
+                // Configure the importer before loading the clip: SaveAndReimport invalidates
+                // clip objects that were loaded earlier.
+                ConfigureClip(file, key);
+
                 var clip = LoadFirstClip(file);
                 if (clip == null) continue;
 
-                var key = ClassifyAnimation(Path.GetFileNameWithoutExtension(file));
-                if (key == null || clips.ContainsKey(key)) continue;
-
                 clips[key] = clip;
-                SetLoop(file, key);
             }
 
             if (!clips.ContainsKey("idle") && !clips.ContainsKey("walk"))
@@ -464,41 +494,74 @@ namespace MPBlocks.Editor
             return null;
         }
 
-        private static string ClassifyAnimation(string fileName)
+        /// <summary>
+        /// Maps a file name to a controller slot. Priority 0 is a plain clip, higher numbers are
+        /// variants (strafe/turn) that are only used when nothing plain exists.
+        /// </summary>
+        private static (string key, int priority) ClassifyAnimation(string fileName)
         {
             var name = fileName.ToLowerInvariant();
+            bool variant = name.Contains("strafe") || name.Contains("turn");
 
-            if (name.Contains("idle") || name.Contains("stand")) return "idle";
-            if (name.Contains("walk")) return "walk";
-            if (name.Contains("run") || name.Contains("jog")) return "run";
-            if (name.Contains("jump")) return "jump";
+            if (name.Contains("idle")) return ("idle", variant ? 1 : 0);
+            if (name.Contains("stand")) return ("idle", 1);
+            if (name.Contains("walk")) return ("walk", variant ? 2 : 0);
+            if (name.Contains("run") || name.Contains("jog")) return ("run", variant ? 2 : 0);
+            if (name.Contains("jump")) return ("jump", variant ? 2 : 0);
 
-            return null;
+            return (null, int.MaxValue);
         }
 
-        /// <summary>Locomotion clips must loop or the character freezes at the last frame.</summary>
-        private static void SetLoop(string fbxPath, string key)
+        /// <summary>
+        /// Import settings the generated controller depends on:
+        /// - locomotion clips loop, or the character freezes on the last frame;
+        /// - root motion is baked into pose, otherwise Mixamo's forward motion stays on the Hips
+        ///   bone and the model slides away from the player object (and its camera) while walking.
+        /// </summary>
+        private static void ConfigureClip(string fbxPath, string key)
         {
-            if (key != "idle" && key != "walk" && key != "run") return;
-
             var importer = AssetImporter.GetAtPath(fbxPath) as ModelImporter;
             if (importer == null) return;
 
             var clips = importer.defaultClipAnimations;
             if (clips == null || clips.Length == 0) return;
 
+            bool loops = key == "idle" || key == "walk" || key == "run";
             bool changed = false;
+
             foreach (var clip in clips)
             {
-                if (clip.loopTime) continue;
-                clip.loopTime = true;
-                changed = true;
+                if (loops && !clip.loopTime)
+                {
+                    clip.loopTime = true;
+                    changed = true;
+                }
+
+                if (!clip.lockRootPositionXZ)
+                {
+                    clip.lockRootPositionXZ = true;
+                    changed = true;
+                }
+
+                if (!clip.lockRootRotation)
+                {
+                    clip.lockRootRotation = true;
+                    changed = true;
+                }
+
+                // Jump keeps its vertical motion; walking clips are flattened onto the ground.
+                if (loops && !clip.lockRootHeightY)
+                {
+                    clip.lockRootHeightY = true;
+                    changed = true;
+                }
             }
 
             if (!changed) return;
 
             importer.clipAnimations = clips;
             importer.SaveAndReimport();
+            Debug.Log($"[MP] INFO CHARACTER_CLIP_BAKED path={Path.GetFileName(fbxPath)} key={key}");
         }
 
         // ---------------------------------------------------------------- roster
