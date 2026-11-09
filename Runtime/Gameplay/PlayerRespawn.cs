@@ -31,6 +31,9 @@ namespace MPBlocks.Gameplay
         [Tooltip("Visual Transform hidden while dead and shown again on respawn; optional, and every machine toggles it from the health value. Do not assign the root that carries this component or the NetworkObject: deactivating it stops the coroutine and the respawn never happens.")]
         [SerializeField] private Transform visual;
 
+        [Tooltip("Player appearance carrying the selected character model. Its instantiated model is hidden together with 'visual' when empty, so a chosen Mixamo character does not keep standing while dead.")]
+        [SerializeField] private PlayerAppearance appearance;
+
         private PlayerSpawnPoint[] _spawnPoints;
         private int _spawnCursor;
         private Coroutine _respawnRoutine;
@@ -157,8 +160,14 @@ namespace MPBlocks.Gameplay
 
         private void ApplyVisual(bool visible)
         {
-            if (visual == null) return;
-            visual.gameObject.SetActive(visible);
+            if (visual != null) visual.gameObject.SetActive(visible);
+
+            // The character model is instantiated at runtime by PlayerAppearance, so it is not
+            // a child of 'visual'. Hide it separately or a dead player keeps standing.
+            if (appearance == null) appearance = GetComponent<PlayerAppearance>();
+
+            var instance = appearance != null ? appearance.VisualInstance : null;
+            if (instance != null && instance.activeSelf != visible) instance.SetActive(visible);
         }
     }
 }

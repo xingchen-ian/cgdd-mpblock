@@ -75,6 +75,12 @@ namespace MPBlocks.Editor
             AssetDatabase.SaveAssets();
             Selection.activeGameObject = selector.gameObject;
 
+            // Dropped Mixamo folders become selectable characters in the same step.
+            if (AssetDatabase.IsValidFolder(CharacterImporter.SourceFolder))
+            {
+                CharacterImporter.Import(silent: true);
+            }
+
             Debug.Log("[MP] INFO CHARACTER_SELECT_ADDED roster=" + RosterPath + " scene=" + selector.gameObject.scene.name);
         }
 
