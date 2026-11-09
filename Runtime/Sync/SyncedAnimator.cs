@@ -285,6 +285,7 @@ namespace MPBlocks.Sync
             }
 
             animator.SetTrigger(_triggerHashes[index]);
+            MPLog.Info("ANIMATOR_TRIGGER", ("label", label), ("parameter", parameter), ("clientId", OwnerClientId));
 
             if (IsServer)
             {
@@ -372,6 +373,7 @@ namespace MPBlocks.Sync
         {
             if (animator == null || index < 0 || index >= _triggerHashes.Length) return;
             animator.SetTrigger(_triggerHashes[index]);
+            MPLog.Info("ANIMATOR_TRIGGER", ("label", label), ("index", index), ("remote", true));
         }
 
         [ServerRpc]

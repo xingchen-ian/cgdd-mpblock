@@ -70,6 +70,8 @@ namespace MPBlocks.Gameplay
         private bool _hasGrounded;
         private float _smoothedSpeed;
         private float _groundProbeOffset = 0.1f;
+        private readonly RaycastHit[] _groundHits = new RaycastHit[8];
+        private bool _lastGrounded = true;
         private Transform _rootBone;
         private Vector3 _rootBoneBind;
         private Vector3 _lastPosition;
@@ -222,6 +224,31 @@ namespace MPBlocks.Gameplay
         }
 
         /// <summary>
+        /// The probe starts inside the player's own collider, and a raycast from inside a collider
+        /// reports that collider first — which made "Grounded" true even in mid-air, so the Jump
+        /// state could never be entered. Skip hits that belong to this player.
+        /// </summary>
+        private bool ProbeGround()
+        {
+            var origin = transform.position + Vector3.up * _groundProbeOffset;
+            float distance = Mathf.Max(0.05f, groundCheckDistance);
+
+            int count = Physics.RaycastNonAlloc(origin, Vector3.down, _groundHits, distance, groundMask,
+                QueryTriggerInteraction.Ignore);
+
+            for (int i = 0; i < count; i++)
+            {
+                var hit = _groundHits[i];
+                if (hit.collider == null) continue;
+                if (hit.collider.transform.IsChildOf(transform)) continue;
+
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// A rigidbody player's origin sits at the capsule centre, so a probe 0.1 m above it never
         /// reaches the ground and "Grounded" stayed false forever — which pinned the rig in the
         /// Jump state. Start the probe just above the capsule's bottom instead.
@@ -265,14 +292,14 @@ namespace MPBlocks.Gameplay
             if (_hasMoveZ) animator.SetFloat(_moveZHash, Input.GetAxisRaw("Vertical"));
             if (_hasGrounded)
             {
-                bool grounded = Physics.Raycast(
-                    transform.position + Vector3.up * _groundProbeOffset,
-                    Vector3.down,
-                    Mathf.Max(0.05f, groundCheckDistance),
-                    groundMask,
-                    QueryTriggerInteraction.Ignore);
-
+                bool grounded = ProbeGround();
                 animator.SetBool(_groundedHash, grounded);
+
+                if (grounded != _lastGrounded)
+                {
+                    _lastGrounded = grounded;
+                    MPLog.Info("PLAYER_GROUNDED", ("label", label), ("clientId", OwnerClientId), ("grounded", grounded));
+                }
             }
         }
     }
