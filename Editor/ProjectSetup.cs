@@ -181,6 +181,32 @@ namespace MPBlocks.Editor
             Debug.Log("[MP] INFO SETUP_PLAYER_AUDIO_REPAIRED path=" + path);
         }
 
+        /// <summary>
+        /// True when the animation rig carries the parameters the current controller expects
+        /// (Speed plus the MoveX/MoveZ direction pair). This makes Refresh Project Setup upgrade
+        /// a player prefab that was built before directional animation existed.
+        /// </summary>
+        private static bool AnimationRigUpToDate(GameObject prefab)
+        {
+            var synced = prefab.GetComponent<SyncedAnimator>();
+            if (synced == null) return false;
+
+            var so = new SerializedObject(synced);
+            var floats = so.FindProperty("floatParameters");
+            if (floats == null) return false;
+
+            bool speed = false, moveX = false, moveZ = false;
+            for (int i = 0; i < floats.arraySize; i++)
+            {
+                var value = floats.GetArrayElementAtIndex(i).stringValue;
+                if (value == "Speed") speed = true;
+                else if (value == "MoveX") moveX = true;
+                else if (value == "MoveZ") moveZ = true;
+            }
+
+            return speed && moveX && moveZ;
+        }
+
         private static bool NeedsAudioRepair(GameObject prefab)
         {
             foreach (var audio in prefab.GetComponentsInChildren<AudioOneShot>(true))
@@ -224,6 +250,7 @@ namespace MPBlocks.Editor
                                     || existing.GetComponent<PlayerAnimator>() == null
                                     || existing.GetComponent<SyncedAnimator>() == null
                                     || existing.GetComponent<AudioOneShot>() == null
+                                    || !AnimationRigUpToDate(existing)
                                     || existing.GetComponent<TargetedNetEvent>() == null
                                     || existing.transform.Find("HoldPoint") == null;
 
@@ -500,7 +527,7 @@ namespace MPBlocks.Editor
             }
 
             var so = new SerializedObject(synced);
-            SetStringArray(so, "floatParameters", new[] { "Speed" });
+            SetStringArray(so, "floatParameters", new[] { "Speed", "MoveX", "MoveZ" });
             SetStringArray(so, "boolParameters", new[] { "Grounded" });
             so.ApplyModifiedPropertiesWithoutUndo();
 

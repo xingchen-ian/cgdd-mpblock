@@ -39,6 +39,12 @@ namespace MPBlocks.Gameplay
         [Tooltip("Float parameter receiving the movement speed. Leave empty to skip. Use the same name in SyncedAnimator's float parameters to replicate it.")]
         [SerializeField] private string speedParameter = "Speed";
 
+        [Tooltip("Float parameter receiving the strafe input (-1 left, 1 right). Leave empty to skip. Use the same name in SyncedAnimator's float parameters to replicate it.")]
+        [SerializeField] private string moveXParameter = "MoveX";
+
+        [Tooltip("Float parameter receiving the forward input (-1 back, 1 forward). Leave empty to skip.")]
+        [SerializeField] private string moveZParameter = "MoveZ";
+
         [Tooltip("Bool parameter receiving grounded state. Leave empty to skip. Use the same name in SyncedAnimator's bool parameters to replicate it.")]
         [SerializeField] private string groundedParameter = "Grounded";
 
@@ -53,7 +59,11 @@ namespace MPBlocks.Gameplay
 
         private int _speedHash;
         private int _groundedHash;
+        private int _moveXHash;
+        private int _moveZHash;
         private bool _hasSpeed;
+        private bool _hasMoveX;
+        private bool _hasMoveZ;
         private bool _hasGrounded;
         private float _smoothedSpeed;
         private Vector3 _lastPosition;
@@ -120,16 +130,22 @@ namespace MPBlocks.Gameplay
         {
             _hasSpeed = false;
             _hasGrounded = false;
+            _hasMoveX = false;
+            _hasMoveZ = false;
 
             if (animator == null) return;
 
             _speedHash = Animator.StringToHash(speedParameter);
             _groundedHash = Animator.StringToHash(groundedParameter);
+            _moveXHash = string.IsNullOrEmpty(moveXParameter) ? 0 : Animator.StringToHash(moveXParameter);
+            _moveZHash = string.IsNullOrEmpty(moveZParameter) ? 0 : Animator.StringToHash(moveZParameter);
 
             foreach (var parameter in animator.parameters)
             {
                 if (parameter.nameHash == _speedHash) _hasSpeed = true;
                 if (parameter.nameHash == _groundedHash) _hasGrounded = true;
+                if (_moveXHash != 0 && parameter.nameHash == _moveXHash) _hasMoveX = true;
+                if (_moveZHash != 0 && parameter.nameHash == _moveZHash) _hasMoveZ = true;
             }
         }
 
@@ -153,6 +169,10 @@ namespace MPBlocks.Gameplay
             _smoothedSpeed = Mathf.Lerp(_smoothedSpeed, speed, Mathf.Clamp01(speedSmoothing * Time.deltaTime));
 
             if (_hasSpeed) animator.SetFloat(_speedHash, _smoothedSpeed);
+
+            // Direction drives the 2D blend tree so strafing/backpedalling plays the matching clip.
+            if (_hasMoveX) animator.SetFloat(_moveXHash, Input.GetAxisRaw("Horizontal"));
+            if (_hasMoveZ) animator.SetFloat(_moveZHash, Input.GetAxisRaw("Vertical"));
             if (_hasGrounded)
             {
                 bool grounded = Physics.Raycast(

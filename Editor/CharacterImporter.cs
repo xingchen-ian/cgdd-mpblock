@@ -423,6 +423,8 @@ namespace MPBlocks.Editor
 
             var controller = AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
             controller.AddParameter("Speed", AnimatorControllerParameterType.Float);
+            controller.AddParameter("MoveX", AnimatorControllerParameterType.Float);
+            controller.AddParameter("MoveZ", AnimatorControllerParameterType.Float);
             controller.AddParameter("Grounded", AnimatorControllerParameterType.Bool);
 
             var stateMachine = controller.layers[0].stateMachine;
@@ -435,19 +437,23 @@ namespace MPBlocks.Editor
             if (clips.ContainsKey("walk"))
             {
                 walk = stateMachine.AddState("Walk");
-                walk.motion = clips["walk"];
-                AddTransition(idle, walk, 0.1f);
-                AddTransition(walk, idle, -0.1f);
+                walk.motion = BuildDirectionalBlend(clips, controller, controllerPath);
+
+                AddSpeedTransition(idle, walk, greater: true, threshold: 0.1f);
+                AddSpeedTransition(walk, idle, greater: false, threshold: 0.1f);
             }
 
             if (clips.ContainsKey("run"))
             {
                 var run = stateMachine.AddState("Run");
                 run.motion = clips["run"];
+
                 if (walk != null)
                 {
-                    AddTransition(walk, run, 0.6f);
-                    AddTransition(run, walk, -0.6f);
+                    // Real speed in m/s: a player moving at SimplePlayerMover.moveSpeed = 4.5
+                    // runs, at about 1.5 walks.
+                    AddSpeedTransition(walk, run, greater: true, threshold: 2.5f);
+                    AddSpeedTransition(run, walk, greater: false, threshold: 2.5f);
                 }
             }
 
@@ -471,14 +477,48 @@ namespace MPBlocks.Editor
             return controller;
         }
 
-        private static void AddTransition(AnimatorState from, AnimatorState to, float speedThreshold)
+        /// <summary>
+        /// 2D blend on (MoveX, MoveZ) so left/right/back movement plays the matching clip instead
+        /// of the forward walk. Falls back to the forward clip for any direction without one.
+        /// </summary>
+        private static BlendTree BuildDirectionalBlend(Dictionary<string, AnimationClip> clips,
+            AnimatorController controller, string controllerPath)
+        {
+            var tree = new BlendTree
+            {
+                name = "WalkDirectional",
+                blendType = BlendTreeType.FreeformDirectional2D,
+                blendParameter = "MoveX",
+                blendParameterY = "MoveZ",
+            };
+
+            AssetDatabase.AddObjectToAsset(tree, controllerPath);
+
+            var walk = clips["walk"];
+            var forward = new Vector2(0f, 1f);
+            var backward = new Vector2(0f, -1f);
+            var left = new Vector2(-1f, 0f);
+            var right = new Vector2(1f, 0f);
+            var center = Vector2.zero;
+
+            tree.AddChild(walk, center);
+            tree.AddChild(walk, forward);
+            tree.AddChild(clips.ContainsKey("back") ? clips["back"] : walk, backward);
+            tree.AddChild(clips.ContainsKey("left") ? clips["left"] : walk, left);
+            tree.AddChild(clips.ContainsKey("right") ? clips["right"] : walk, right);
+
+            AssetDatabase.SaveAssets();
+            return tree;
+        }
+
+        private static void AddSpeedTransition(AnimatorState from, AnimatorState to, bool greater, float threshold)
         {
             var transition = from.AddTransition(to);
             transition.hasExitTime = false;
             transition.duration = 0.12f;
             transition.AddCondition(
-                speedThreshold > 0f ? AnimatorConditionMode.Greater : AnimatorConditionMode.Less,
-                Mathf.Abs(speedThreshold),
+                greater ? AnimatorConditionMode.Greater : AnimatorConditionMode.Less,
+                threshold,
                 "Speed");
         }
 
@@ -497,28 +537,34 @@ namespace MPBlocks.Editor
 
         /// <summary>
         /// Maps a file name to a controller slot. Priority 0 is a plain clip, higher numbers are
-        /// variants (strafe/turn) that are only used when nothing plain exists.
+        /// variants that are only used when nothing plainer exists. Direction is checked before
+        /// "walk" so "left strafe walking.fbx" becomes the left clip, not the forward walk.
         /// </summary>
         private static (string key, int priority) ClassifyAnimation(string fileName)
         {
             var name = fileName.ToLowerInvariant();
-            bool variant = name.Contains("strafe") || name.Contains("turn");
+            bool strafe = name.Contains("strafe");
+            bool turn = name.Contains("turn");
 
-            if (name.Contains("idle")) return ("idle", variant ? 1 : 0);
+            if (turn) return (null, int.MaxValue);
+
+            if (name.Contains("backward") || name.Contains("backwards") || name.Contains("back"))
+            {
+                return ("back", strafe ? 2 : 0);
+            }
+
+            if (strafe && name.Contains("left")) return ("left", name.Contains("walking") ? 1 : 0);
+            if (strafe && name.Contains("right")) return ("right", name.Contains("walking") ? 1 : 0);
+
+            if (name.Contains("idle")) return ("idle", 0);
             if (name.Contains("stand")) return ("idle", 1);
-            if (name.Contains("walk")) return ("walk", variant ? 2 : 0);
-            if (name.Contains("run") || name.Contains("jog")) return ("run", variant ? 2 : 0);
-            if (name.Contains("jump")) return ("jump", variant ? 2 : 0);
+            if (name.Contains("walk")) return ("walk", 0);
+            if (name.Contains("run") || name.Contains("jog")) return ("run", 0);
+            if (name.Contains("jump")) return ("jump", 0);
 
             return (null, int.MaxValue);
         }
 
-        /// <summary>
-        /// Import settings the generated controller depends on:
-        /// - locomotion clips loop, or the character freezes on the last frame;
-        /// - root motion is baked into pose, otherwise Mixamo's forward motion stays on the Hips
-        ///   bone and the model slides away from the player object (and its camera) while walking.
-        /// </summary>
         /// <summary>
         /// Animation clips must use the same rig type as the model. A model switched to Humanoid
         /// in the Rig tab keeps its animation FBX on Generic, and then nothing binds — the
@@ -529,6 +575,7 @@ namespace MPBlocks.Editor
         {
             var modelImporter = AssetImporter.GetAtPath(character.ModelPath) as ModelImporter;
             if (modelImporter == null) return;
+
             // 3 == Humanoid in the serialized importer settings (verified in .fbx.meta).
             const ModelImporterAnimationType humanoid = (ModelImporterAnimationType)3;
 
@@ -558,11 +605,7 @@ namespace MPBlocks.Editor
                 var importer = AssetImporter.GetAtPath(file) as ModelImporter;
                 if (importer == null) continue;
 
-                if ((int)importer.animationType == (int)humanoid
-                    && importer.sourceAvatar == avatar)
-                {
-                    continue;
-                }
+                if ((int)importer.animationType == (int)humanoid && importer.sourceAvatar == avatar) continue;
 
                 importer.animationType = humanoid;
                 importer.avatarSetup = ModelImporterAvatarSetup.CopyFromOther;
@@ -576,6 +619,14 @@ namespace MPBlocks.Editor
             Debug.Log($"[MP] INFO CHARACTER_RIG_ALIGNED name={character.Name} type=Humanoid files={aligned}");
         }
 
+        /// <summary>
+        /// Import settings the generated controller depends on:
+        /// - locomotion clips loop, otherwise the character freezes on the last frame
+        ///   (tick "Loop Pose" by hand if the cycle visibly pops once per loop — Unity does not
+        ///   expose that flag to scripts);
+        /// - root motion is baked into pose, otherwise Mixamo's forward motion stays on the Hips
+        ///   bone and the model slides away from the player object (and its camera) while walking.
+        /// </summary>
         private static void ConfigureClip(string fbxPath, string key)
         {
             var importer = AssetImporter.GetAtPath(fbxPath) as ModelImporter;
@@ -584,7 +635,8 @@ namespace MPBlocks.Editor
             var clips = importer.defaultClipAnimations;
             if (clips == null || clips.Length == 0) return;
 
-            bool loops = key == "idle" || key == "walk" || key == "run";
+            bool loops = key == "idle" || key == "walk" || key == "run"
+                         || key == "left" || key == "right" || key == "back";
             bool changed = false;
 
             foreach (var clip in clips)
@@ -607,7 +659,6 @@ namespace MPBlocks.Editor
                     changed = true;
                 }
 
-                // Jump keeps its vertical motion; walking clips are flattened onto the ground.
                 if (loops && !clip.lockRootHeightY)
                 {
                     clip.lockRootHeightY = true;
