@@ -206,6 +206,7 @@ namespace MPBlocks.Editor
                    || prefab.GetComponent<PlayerAnimator>() == null
                    || prefab.GetComponent<SyncedAnimator>() == null
                    || prefab.GetComponent<AudioOneShot>() == null
+                   || prefab.GetComponent<PlayerActionTrigger>() == null
                    || prefab.GetComponent<TargetedNetEvent>() == null
                    || prefab.transform.Find("HoldPoint") == null
                    || !AnimationRigUpToDate(prefab);
@@ -521,6 +522,8 @@ namespace MPBlocks.Editor
                 nameSo.ApplyModifiedPropertiesWithoutUndo();
             }
 
+            EnsureActionTrigger(root);
+
             SceneKit.AddAudioOneShot(root, InteractAudio.Hit(), AudioOneShot.Trigger.OnHealthChanged, "hit");
             SceneKit.AddAudioOneShot(root, InteractAudio.Death(), AudioOneShot.Trigger.OnDeath, "death");
 
@@ -540,6 +543,20 @@ namespace MPBlocks.Editor
         /// owner's rig, SyncedAnimator replicates those parameters to everyone else.
         /// Parameter names default to Speed / Grounded — the names the template controller uses.
         /// </summary>
+        /// <summary>
+        /// Adds the F-key action bridge next to the animation rig, so a character that has an
+        /// action clip (attack / wave / …) is playable without writing a script.
+        /// </summary>
+        private static void EnsureActionTrigger(GameObject root)
+        {
+            if (root.GetComponent<PlayerActionTrigger>() != null) return;
+
+            var trigger = root.AddComponent<PlayerActionTrigger>();
+            var so = new SerializedObject(trigger);
+            SetIfEmpty(so, "syncedAnimator", root.GetComponent<SyncedAnimator>());
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
         private static void EnsureAnimationRig(GameObject root)
         {
             var animator = root.GetComponent<PlayerAnimator>();

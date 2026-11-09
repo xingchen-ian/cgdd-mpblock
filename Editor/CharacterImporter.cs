@@ -457,6 +457,35 @@ namespace MPBlocks.Editor
                 }
             }
 
+            // One-shot actions: any other clip whose name says what it does becomes a Trigger
+            // state, so "drop attack.fbx in the folder and press F" works without scripting.
+            foreach (var action in FindActions(character))
+            {
+                var clip = LoadFirstClip(action.Value);
+                if (clip == null) continue;
+
+                if (controller.parameters.All(existing => existing.name != action.Key))
+                {
+                    controller.AddParameter(action.Key, AnimatorControllerParameterType.Trigger);
+                }
+
+                var state = stateMachine.AddState(action.Key);
+                state.motion = clip;
+
+                var enter = stateMachine.AddAnyStateTransition(state);
+                enter.hasExitTime = false;
+                enter.duration = 0.05f;
+                enter.canTransitionToSelf = false;
+                enter.AddCondition(AnimatorConditionMode.If, 0f, action.Key);
+
+                var exit = state.AddTransition(idle);
+                exit.hasExitTime = true;
+                exit.exitTime = 0.9f;
+                exit.duration = 0.1f;
+
+                Debug.Log($"[MP] INFO CHARACTER_ACTION name={character.Name} action={action.Key}");
+            }
+
             if (clips.ContainsKey("jump"))
             {
                 var jump = stateMachine.AddState("Jump");
@@ -520,6 +549,58 @@ namespace MPBlocks.Editor
                 greater ? AnimatorConditionMode.Greater : AnimatorConditionMode.Less,
                 threshold,
                 "Speed");
+        }
+
+        /// <summary>
+        /// Clips whose names describe a one-shot action. Everything here becomes a Trigger
+        /// parameter plus a state, played with SyncedAnimator.SetTrigger.
+        /// </summary>
+        private static List<KeyValuePair<string, string>> FindActions(CharacterSource character)
+        {
+            var actions = new List<KeyValuePair<string, string>>();
+            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var file in character.AnimationFiles)
+            {
+                var stem = Path.GetFileNameWithoutExtension(file);
+                var lower = stem.ToLowerInvariant();
+
+                bool isAction = lower.Contains("attack") || lower.Contains("punch") || lower.Contains("kick")
+                                || lower.Contains("swing") || lower.Contains("slash") || lower.Contains("shoot")
+                                || lower.Contains("fire") || lower.Contains("throw") || lower.Contains("wave")
+                                || lower.Contains("emote") || lower.Contains("dance") || lower.Contains("cast")
+                                || lower.Contains("die") || lower.Contains("death") || lower.Contains("hit");
+
+                if (!isAction) continue;
+
+                var name = ToPascalCase(stem);
+                if (string.IsNullOrEmpty(name) || !used.Add(name)) continue;
+
+                actions.Add(new KeyValuePair<string, string>(name, file));
+            }
+
+            return actions;
+        }
+
+        private static string ToPascalCase(string value)
+        {
+            var builder = new System.Text.StringBuilder(value.Length);
+            bool upper = true;
+
+            foreach (char c in value)
+            {
+                if (char.IsLetterOrDigit(c))
+                {
+                    builder.Append(upper ? char.ToUpperInvariant(c) : c);
+                    upper = false;
+                }
+                else
+                {
+                    upper = true;
+                }
+            }
+
+            return builder.ToString();
         }
 
         private static AnimationClip LoadFirstClip(string fbxPath)

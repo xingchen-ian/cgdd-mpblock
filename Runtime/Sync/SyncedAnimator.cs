@@ -135,7 +135,20 @@ namespace MPBlocks.Sync
             _floatHashes = Filter(floatParameters, available, AnimatorControllerParameterType.Float);
             _boolHashes = Filter(boolParameters, available, AnimatorControllerParameterType.Bool);
             _intHashes = Filter(intParameters, available, AnimatorControllerParameterType.Int);
-            _triggerHashes = Filter(triggerParameters, available, AnimatorControllerParameterType.Trigger);
+            // Triggers are events: replicate every one the controller declares, in controller
+            // order (deterministic on every machine), so adding an action state does not require
+            // editing this component's list first.
+            var listedTriggers = Filter(triggerParameters, available, AnimatorControllerParameterType.Trigger);
+            var mergedTriggers = new System.Collections.Generic.List<int>(listedTriggers);
+
+            foreach (var parameter in available)
+            {
+                if (parameter.type != AnimatorControllerParameterType.Trigger) continue;
+                if (mergedTriggers.Contains(parameter.nameHash)) continue;
+                mergedTriggers.Add(parameter.nameHash);
+            }
+
+            _triggerHashes = mergedTriggers.ToArray();
 
             _floatValues = new float[_floatHashes.Length];
             _boolValues = new bool[_boolHashes.Length];
