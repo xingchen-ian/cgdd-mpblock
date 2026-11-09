@@ -100,6 +100,7 @@ namespace MPBlocks.Editor
 
             foreach (var character in characters)
             {
+                AlignRig(character, result);
                 var prefab = EnsureVisualPrefab(character, force, result);
                 if (prefab == null) continue;
 
@@ -518,6 +519,63 @@ namespace MPBlocks.Editor
         /// - root motion is baked into pose, otherwise Mixamo's forward motion stays on the Hips
         ///   bone and the model slides away from the player object (and its camera) while walking.
         /// </summary>
+        /// <summary>
+        /// Animation clips must use the same rig type as the model. A model switched to Humanoid
+        /// in the Rig tab keeps its animation FBX on Generic, and then nothing binds — the
+        /// character stands still even though the controller is fine. This copies the model's
+        /// avatar onto every animation FBX so the clips retarget.
+        /// </summary>
+        private static void AlignRig(CharacterSource character, Result result)
+        {
+            var modelImporter = AssetImporter.GetAtPath(character.ModelPath) as ModelImporter;
+            if (modelImporter == null) return;
+            // 3 == Humanoid in the serialized importer settings (verified in .fbx.meta).
+            const ModelImporterAnimationType humanoid = (ModelImporterAnimationType)3;
+
+            if ((int)modelImporter.animationType != (int)humanoid) return;
+
+            Avatar avatar = null;
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(character.ModelPath))
+            {
+                if (asset is Avatar found)
+                {
+                    avatar = found;
+                    break;
+                }
+            }
+
+            if (avatar == null)
+            {
+                result.Notes.Add($"{character.Name}: model is Humanoid but has no Avatar yet — open its Rig tab and press Apply.");
+                Debug.LogWarning($"[MP] WARN CHARACTER_NO_AVATAR name={character.Name} model={character.ModelPath}");
+                return;
+            }
+
+            int aligned = 0;
+
+            foreach (var file in character.AnimationFiles)
+            {
+                var importer = AssetImporter.GetAtPath(file) as ModelImporter;
+                if (importer == null) continue;
+
+                if ((int)importer.animationType == (int)humanoid
+                    && importer.sourceAvatar == avatar)
+                {
+                    continue;
+                }
+
+                importer.animationType = humanoid;
+                importer.avatarSetup = ModelImporterAvatarSetup.CopyFromOther;
+                importer.sourceAvatar = avatar;
+                importer.SaveAndReimport();
+                aligned++;
+            }
+
+            if (aligned == 0) return;
+
+            Debug.Log($"[MP] INFO CHARACTER_RIG_ALIGNED name={character.Name} type=Humanoid files={aligned}");
+        }
+
         private static void ConfigureClip(string fbxPath, string key)
         {
             var importer = AssetImporter.GetAtPath(fbxPath) as ModelImporter;
