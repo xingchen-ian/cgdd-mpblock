@@ -48,6 +48,9 @@ namespace MPBlocks.Editor
 
             BuildArena();
 
+            // Without this a fresh scene has no character choice at all.
+            CharacterSelectSetup.Apply(config);
+
             SceneKit.SaveScene(scene, spec.ScenePath);
 
             MPLog.Info("SETUP_TEMPLATE3",

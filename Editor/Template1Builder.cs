@@ -58,6 +58,9 @@ namespace MPBlocks.Editor
             BuildPad("Pad_Yellow", "PadYellowOpen", new Vector3(3.5f, 0.5f, -3.5f),
                 new Color(0.34f, 0.30f, 0.10f), new Color(1.00f, 0.90f, 0.25f));
 
+            // Without this a fresh scene has no character choice at all.
+            CharacterSelectSetup.Apply(config);
+
             SceneKit.SaveScene(scene, spec.ScenePath);
 
             MPLog.Info("SETUP_TEMPLATE1",

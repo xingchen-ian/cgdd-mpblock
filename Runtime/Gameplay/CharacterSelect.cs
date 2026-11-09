@@ -77,7 +77,10 @@ namespace MPBlocks.Gameplay
             {
                 if (_resolvedRoster == null || _resolvedRoster.Count == 0)
                 {
-                    MPLog.Info("CHARACTER_SELECT_DISABLED", ("label", label), ("reason", "no roster"));
+                    MPLog.Warn("CHARACTER_SELECT_DISABLED",
+                        ("label", label),
+                        ("reason", "no roster"),
+                        ("hint", "assign a CharacterRoster or run MPBlocks > Add Character Selection to Scene"));
                     return;
                 }
 

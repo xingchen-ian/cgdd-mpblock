@@ -83,6 +83,9 @@ namespace MPBlocks.Editor
             SceneKit.CreateSpawnPoint("Spawn_C", new Vector3(-6f, 0f, 6f), Vector3.zero);
             SceneKit.CreateSpawnPoint("Spawn_D", new Vector3(6f, 0f, 6f), Vector3.zero);
 
+            // A generated scene without this has no character choice, which is easy to miss.
+            CharacterSelectSetup.Apply(config);
+
             SceneKit.SaveScene(scene, spec.ScenePath);
             Debug.Log("[MP] INFO SETUP_EMPTY_SCENE path=" + spec.ScenePath);
         }

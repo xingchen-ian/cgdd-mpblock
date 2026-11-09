@@ -52,6 +52,7 @@ namespace MPBlocks.Editor
             // Also fill in UI fields that were added to the session panel after this scene
             // was generated (the name field). Additive only — no scene is rebuilt.
             SessionUIUpgrader.TryUpgradeActiveScene();
+            CharacterSelectSetup.EnsureActiveScene();
 
             AssetDatabase.SaveAssets();
             Debug.Log("[MP] INFO SETUP_REFRESHED");

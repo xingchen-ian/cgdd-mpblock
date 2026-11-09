@@ -24,6 +24,22 @@ namespace MPBlocks.Editor
     {
         public const string RosterPath = "Assets/Settings/CharacterRoster.asset";
 
+        /// <summary>
+        /// Adds character selection to the open scene when it is missing. Idempotent, so the
+        /// refresh menu can call it every time; returns true only when something was added.
+        /// </summary>
+        public static bool EnsureActiveScene()
+        {
+            if (Object.FindObjectOfType<CharacterSelect>(true) != null) return false;
+
+            var bootstrap = Object.FindObjectOfType<NetBootstrap>(true);
+            if (bootstrap == null || bootstrap.Config == null) return false;
+
+            Apply(bootstrap.Config);
+            Debug.Log("[MP] INFO CHARACTER_SELECT_AUTO_ADDED scene=" + bootstrap.gameObject.scene.name);
+            return true;
+        }
+
         [MenuItem("MPBlocks/Character Selection/Open Character Roster", false, 30)]
         public static void OpenRoster()
         {

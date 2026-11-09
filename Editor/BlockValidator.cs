@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using MPBlocks.Core;
+using MPBlocks.Gameplay;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
 using UnityEditor;
@@ -149,6 +150,13 @@ namespace MPBlocks.Editor
             CheckNetworkManager(sceneIssues);
             CheckSceneBehaviours(sceneIssues);
 
+            if (Object.FindObjectOfType<CharacterSelect>(true) == null)
+            {
+                sceneIssues.Add(new Issue(false, "scene",
+                    "no CharacterSelect: players get no character choice " +
+                    "(MPBlocks > Add Character Selection to Scene, or Refresh Project Setup)"));
+            }
+
             foreach (var issue in sceneIssues)
             {
                 issues.Add(new Issue(issue.IsError, sceneName, issue.Where, issue.Message));
@@ -247,6 +255,13 @@ namespace MPBlocks.Editor
                 else if (config.PlayerPrefab.GetComponent<NetworkObject>() == null)
                 {
                     issues.Add(new Issue(true, path, "NetConfig player prefab has no NetworkObject"));
+                }
+
+                if (config.CharacterRoster == null)
+                {
+                    issues.Add(new Issue(false, path,
+                        "NetConfig has no character roster: the character select panel will be disabled " +
+                        "(MPBlocks > Add Character Selection to Scene)"));
                 }
 
                 if (config.PlayerMovement == MPPlayerMovement.Rigidbody && config.RigidbodyPlayerPrefab == null)
