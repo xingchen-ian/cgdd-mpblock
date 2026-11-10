@@ -75,7 +75,8 @@ namespace MPBlocks.Gameplay
         private float _groundProbeOffset = 0.1f;
         private readonly RaycastHit[] _groundHits = new RaycastHit[8];
         private bool _lastGrounded = true;
-        private string _lastClip = string.Empty;
+        private static readonly string[] LocomotionStateNames = { "Idle", "Walk", "Run", "Jump" };
+        private string _lastState = string.Empty;
         private Transform _rootBone;
         private Vector3 _rootBoneBind;
         private Vector3 _lastPosition;
@@ -236,12 +237,42 @@ namespace MPBlocks.Gameplay
         {
             if (!logStateChanges || animator == null) return;
 
-            var clips = animator.GetCurrentAnimatorClipInfo(0);
-            var clip = clips.Length > 0 && clips[0].clip != null ? clips[0].clip.name : "none";
-            if (clip == _lastClip) return;
+            // Every Mixamo take is called "mixamo.com", so the clip name says nothing; the state
+            // name is what identifies Idle / Walk / Run / Jump / the action.
+            var info = animator.GetCurrentAnimatorStateInfo(0);
+            var state = StateName(info);
+            if (state == _lastState) return;
 
-            _lastClip = clip;
-            MPLog.Info("PLAYER_ANIM_STATE", ("label", label), ("clientId", OwnerClientId), ("clip", clip));
+            _lastState = state;
+            MPLog.Info("PLAYER_ANIM_STATE", ("label", label), ("clientId", OwnerClientId), ("state", state), ("clip", CurrentClip()));
+        }
+
+        /// <summary>
+        /// The controller asset type lives in UnityEditor and is unavailable here, so match the
+        /// running state against the names the generated controller uses: the four locomotion
+        /// states plus every trigger (each action state has the same name as its trigger).
+        /// </summary>
+        private string StateName(AnimatorStateInfo info)
+        {
+            foreach (var name in LocomotionStateNames)
+            {
+                if (info.IsName(name)) return name;
+            }
+
+            var parameters = animator.parameters;
+            for (int i = 0; i < parameters.Length; i++)
+            {
+                if (parameters[i].type != AnimatorControllerParameterType.Trigger) continue;
+                if (info.IsName(parameters[i].name)) return parameters[i].name;
+            }
+
+            return info.shortNameHash.ToString();
+        }
+
+        private string CurrentClip()
+        {
+            var clips = animator.GetCurrentAnimatorClipInfo(0);
+            return clips.Length > 0 && clips[0].clip != null ? clips[0].clip.name : "none";
         }
 
         private bool ProbeGround()

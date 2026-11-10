@@ -63,6 +63,7 @@ namespace MPBlocks.Sync
 
         private float _timer;
         private bool _bound;
+        private RuntimeAnimatorController _boundController;
 
         /// <summary>The Animator being synchronized. May be null until bound.</summary>
         public Animator Animator => animator;
@@ -158,6 +159,7 @@ namespace MPBlocks.Sync
             for (int i = 0; i < _boolHashes.Length; i++) _boolValues[i] = animator.GetBool(_boolHashes[i]);
             for (int i = 0; i < _intHashes.Length; i++) _intValues[i] = animator.GetInteger(_intHashes[i]);
 
+            _boundController = animator.runtimeAnimatorController;
             _bound = true;
             MPLog.Info("SYNCED_ANIMATOR_READY",
                 ("label", label),
@@ -202,6 +204,14 @@ namespace MPBlocks.Sync
 
         private void Update()
         {
+            // The character model is applied after spawn, so the parameter lists may have been
+            // captured against no controller (triggers=0 in the READY log). Re-bind as soon as the
+            // controller changes, otherwise SetTrigger rejects every action.
+            if (animator != null && _bound && animator.runtimeAnimatorController != _boundController)
+            {
+                BindParameters();
+            }
+
             if (!IsSpawned || !_bound || animator == null || !HasAuthority) return;
 
             _timer += Time.deltaTime;
@@ -277,7 +287,16 @@ namespace MPBlocks.Sync
                 return;
             }
 
-            int index = FindTriggerIndex(Animator.StringToHash(parameter));
+            int hash = Animator.StringToHash(parameter);
+            int index = FindTriggerIndex(hash);
+
+            if (index < 0)
+            {
+                // The trigger may have appeared with a character that was set after binding.
+                BindParameters();
+                index = FindTriggerIndex(hash);
+            }
+
             if (index < 0)
             {
                 MPLog.Warn("SYNCED_ANIMATOR_TRIGGER_MISSING", ("label", label), ("parameter", parameter));
