@@ -544,12 +544,50 @@ namespace MPBlocks.Editor
         /// Parameter names default to Speed / Grounded — the names the template controller uses.
         /// </summary>
         /// <summary>
+        /// A prefab from an older version deserialized an empty key array, so every press was a
+        /// no-op. Fill the defaults in so the Inspector shows what will actually be pressed.
+        /// </summary>
+        private static void RepairActionTrigger(PlayerActionTrigger trigger, GameObject root)
+        {
+            var so = new SerializedObject(trigger);
+            bool dirty = false;
+
+            var keys = so.FindProperty("keys");
+            if (keys != null && keys.arraySize == 0)
+            {
+                keys.arraySize = 6;
+                keys.GetArrayElementAtIndex(0).intValue = (int)KeyCode.F;
+                keys.GetArrayElementAtIndex(1).intValue = (int)KeyCode.G;
+                keys.GetArrayElementAtIndex(2).intValue = (int)KeyCode.H;
+                keys.GetArrayElementAtIndex(3).intValue = (int)KeyCode.T;
+                keys.GetArrayElementAtIndex(4).intValue = (int)KeyCode.Y;
+                keys.GetArrayElementAtIndex(5).intValue = (int)KeyCode.U;
+                dirty = true;
+                Debug.Log("[MP] INFO SETUP_ACTION_KEYS_ADDED keys=F,G,H,T,Y,U");
+            }
+
+            var synced = so.FindProperty("syncedAnimator");
+            if (synced != null && synced.objectReferenceValue == null)
+            {
+                synced.objectReferenceValue = root.GetComponent<SyncedAnimator>();
+                dirty = true;
+            }
+
+            if (dirty) so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
         /// Adds the F-key action bridge next to the animation rig, so a character that has an
         /// action clip (attack / wave / …) is playable without writing a script.
         /// </summary>
         private static void EnsureActionTrigger(GameObject root)
         {
-            if (root.GetComponent<PlayerActionTrigger>() != null) return;
+            var existing = root.GetComponent<PlayerActionTrigger>();
+            if (existing != null)
+            {
+                RepairActionTrigger(existing, root);
+                return;
+            }
 
             var trigger = root.AddComponent<PlayerActionTrigger>();
             var so = new SerializedObject(trigger);

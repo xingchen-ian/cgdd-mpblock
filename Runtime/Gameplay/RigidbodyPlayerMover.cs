@@ -65,6 +65,8 @@ namespace MPBlocks.Gameplay
         private float _yaw;
         private float _appliedYaw;
         private bool _grounded;
+        private float _groundProbeOffset = 0.1f;
+        private readonly RaycastHit[] _groundHits = new RaycastHit[8];
         private bool _jumpQueued;
 
         /// <summary>Shown in [MP] log lines.</summary>
@@ -124,6 +126,9 @@ namespace MPBlocks.Gameplay
             // left/right when the capsule bumped into something.
             _body.constraints = RigidbodyConstraints.FreezeRotation;
             _body.angularVelocity = Vector3.zero;
+            var capsule = GetComponent<CapsuleCollider>();
+            if (capsule != null) _groundProbeOffset = capsule.center.y - capsule.height * 0.5f + 0.1f;
+
             _yaw = transform.eulerAngles.y;
             _appliedYaw = _yaw;
             _body.rotation = Quaternion.Euler(0f, _yaw, 0f);
@@ -141,6 +146,28 @@ namespace MPBlocks.Gameplay
             MPLog.Info("RIGIDBODY_PLAYER_READY", ("label", label), ("clientId", OwnerClientId));
         }
 
+        /// <summary>
+        /// A rigidbody player's origin is the capsule centre, so a probe 0.1 m above it never
+        /// reaches the floor and the jump check below refused to fire. Probe from just above the
+        /// capsule bottom and skip our own colliders (a ray started inside them hits them first).
+        /// </summary>
+        private bool ProbeGround()
+        {
+            var origin = transform.position + Vector3.up * _groundProbeOffset;
+            int count = Physics.RaycastNonAlloc(origin, Vector3.down, _groundHits,
+                Mathf.Max(0.05f, groundCheckDistance), groundMask, QueryTriggerInteraction.Ignore);
+
+            for (int i = 0; i < count; i++)
+            {
+                var hit = _groundHits[i];
+                if (hit.collider == null) continue;
+                if (hit.collider.transform.IsChildOf(transform)) continue;
+                return true;
+            }
+
+            return false;
+        }
+
         private void Update()
         {
             if (!IsSpawned || !IsOwner) return;
@@ -151,15 +178,22 @@ namespace MPBlocks.Gameplay
                 _yaw += Input.GetAxis("Mouse X") * lookSensitivity;
             }
 
-            _grounded = Physics.Raycast(
-                transform.position + Vector3.up * 0.1f,
-                Vector3.down,
-                Mathf.Max(0.05f, groundCheckDistance),
-                groundMask,
-                QueryTriggerInteraction.Ignore);
+            _grounded = ProbeGround();
 
             // Read the jump key here: GetKeyDown can be missed in FixedUpdate.
-            if (_grounded && Input.GetKeyDown(KeyCode.Space)) _jumpQueued = true;
+            if (Input.GetKeyDown(KeyCode.Space) && !_jumpQueued)
+            {
+                if (_grounded)
+                {
+                    _jumpQueued = true;
+                    MPLog.Info("PLAYER_JUMP_QUEUED", ("label", label), ("clientId", OwnerClientId), ("grounded", true));
+                }
+                else
+                {
+                    MPLog.Warn("PLAYER_JUMP_REFUSED", ("label", label), ("clientId", OwnerClientId),
+                        ("reason", "the ground probe found nothing — check the floor collider and groundMask"));
+                }
+            }
         }
 
         private void FixedUpdate()
@@ -198,6 +232,7 @@ namespace MPBlocks.Gameplay
             if (!_grounded) return;
 
             _body.velocity = new Vector3(direction.x * speed, jumpSpeed, direction.z * speed);
+            MPLog.Info("PLAYER_JUMP", ("label", label), ("clientId", OwnerClientId), ("jumpSpeed", jumpSpeed));
         }
     }
 }

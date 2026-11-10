@@ -48,6 +48,11 @@ namespace MPBlocks.Gameplay
         [Tooltip("Keep a Health on this object from acting while dead.")]
         [SerializeField] private bool ignoreWhenDead = true;
 
+        private static readonly KeyCode[] DefaultKeys =
+        {
+            KeyCode.F, KeyCode.G, KeyCode.H, KeyCode.T, KeyCode.Y, KeyCode.U,
+        };
+
         private Health _health;
         private float _nextAllowed;
         private string[] _boundActions = System.Array.Empty<string>();
@@ -67,6 +72,10 @@ namespace MPBlocks.Gameplay
             }
 
             if (!IsOwner) return;
+
+            // A prefab created before this field existed deserializes an empty array, which made
+            // every key press a no-op even though the action list was resolved.
+            if (keys == null || keys.Length == 0) keys = DefaultKeys;
 
             ResolveActions();
         }
