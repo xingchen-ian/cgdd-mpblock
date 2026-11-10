@@ -32,6 +32,16 @@ namespace MPBlocks.Gameplay
         private readonly NetworkList<int> _scores = new NetworkList<int>(
             null, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+        /// <summary>
+        /// NetworkList owns a native container; NGO reports "A Native Collection has not been
+        /// disposed" for every list that is not disposed when the object goes away.
+        /// </summary>
+        public override void OnDestroy()
+        {
+            _scores?.Dispose();
+            base.OnDestroy();
+        }
+
         /// <summary>Raised on every machine whenever any score changes. The HUD listens to this.</summary>
         public event Action Changed;
 

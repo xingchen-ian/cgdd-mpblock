@@ -51,6 +51,9 @@ namespace MPBlocks.Gameplay
         [Tooltip("How quickly the speed parameter follows the measured speed (higher = snappier).")]
         [SerializeField] private float speedSmoothing = 12f;
 
+        [Tooltip("Log every animation clip change as [MP] INFO PLAYER_ANIM_STATE, so a key that fires but does not change the pose is visible.")]
+        [SerializeField] private bool logStateChanges = true;
+
         [Tooltip("Root bone whose horizontal motion is locked after every animation frame, so a clip can never slide the model away from the player object (and its camera). Mixamo names it mixamorig:Hips; leave empty to disable.")]
         [SerializeField] private string rootBoneName = "mixamorig:Hips";
 
@@ -72,6 +75,7 @@ namespace MPBlocks.Gameplay
         private float _groundProbeOffset = 0.1f;
         private readonly RaycastHit[] _groundHits = new RaycastHit[8];
         private bool _lastGrounded = true;
+        private string _lastClip = string.Empty;
         private Transform _rootBone;
         private Vector3 _rootBoneBind;
         private Vector3 _lastPosition;
@@ -228,6 +232,18 @@ namespace MPBlocks.Gameplay
         /// reports that collider first — which made "Grounded" true even in mid-air, so the Jump
         /// state could never be entered. Skip hits that belong to this player.
         /// </summary>
+        private void LogClipChange()
+        {
+            if (!logStateChanges || animator == null) return;
+
+            var clips = animator.GetCurrentAnimatorClipInfo(0);
+            var clip = clips.Length > 0 && clips[0].clip != null ? clips[0].clip.name : "none";
+            if (clip == _lastClip) return;
+
+            _lastClip = clip;
+            MPLog.Info("PLAYER_ANIM_STATE", ("label", label), ("clientId", OwnerClientId), ("clip", clip));
+        }
+
         private bool ProbeGround()
         {
             var origin = transform.position + Vector3.up * _groundProbeOffset;
@@ -294,6 +310,8 @@ namespace MPBlocks.Gameplay
             {
                 bool grounded = ProbeGround();
                 animator.SetBool(_groundedHash, grounded);
+
+                LogClipChange();
 
                 if (grounded != _lastGrounded)
                 {

@@ -41,6 +41,16 @@ namespace MPBlocks.Gameplay
         private readonly NetworkList<int> _ownerBySlot = new NetworkList<int>(
             null, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server);
 
+        /// <summary>
+        /// NetworkList owns a native container; NGO reports "A Native Collection has not been
+        /// disposed" for every list that is not disposed when the object goes away.
+        /// </summary>
+        public override void OnDestroy()
+        {
+            _ownerBySlot?.Dispose();
+            base.OnDestroy();
+        }
+
         private CharacterRoster _resolvedRoster;
 
         /// <summary>The scene's active selector, if one exists.</summary>

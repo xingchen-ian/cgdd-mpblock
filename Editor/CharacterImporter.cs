@@ -170,8 +170,16 @@ namespace MPBlocks.Editor
 
                 if (isCharacter)
                 {
-                    // Several skinned models in one folder: the first one wins.
-                    if (source.ModelPath == null) source.ModelPath = path;
+                    // Several skinned models in one folder: prefer the one named after the folder
+                    // ("Man.fbx" in Assets/Character/Man), otherwise the first one.
+                    var stem = Path.GetFileNameWithoutExtension(path);
+                    bool namedAfterFolder = string.Equals(stem, source.Name, StringComparison.OrdinalIgnoreCase);
+
+                    if (source.ModelPath == null || (namedAfterFolder && !string.Equals(
+                            Path.GetFileNameWithoutExtension(source.ModelPath), source.Name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        source.ModelPath = path;
+                    }
                 }
                 else
                 {
@@ -380,7 +388,13 @@ namespace MPBlocks.Editor
             // Keep the plainest one: strafes and turns are variants, not the locomotion clip.
             var best = new Dictionary<string, KeyValuePair<int, string>>();
 
-            foreach (var file in character.AnimationFiles)
+            // A Mixamo download with skin is both the model and one clip: "Breathing Idle.fbx"
+            // may be the character mesh *and* the only idle animation. Classify it too, otherwise
+            // the Idle state ends up with no motion and every action returns to an empty pose.
+            var clipCandidates = new List<string>(character.AnimationFiles);
+            if (!string.IsNullOrEmpty(character.ModelPath)) clipCandidates.Add(character.ModelPath);
+
+            foreach (var file in clipCandidates)
             {
                 var match = ClassifyAnimation(Path.GetFileNameWithoutExtension(file));
                 if (match.key == null) continue;
@@ -401,9 +415,15 @@ namespace MPBlocks.Editor
                 ConfigureClip(file, key);
 
                 var clip = LoadFirstClip(file);
-                if (clip == null) continue;
+                if (clip == null)
+                {
+                    Debug.LogWarning($"[MP] WARN CHARACTER_CLIP_EMPTY key={key} path={Path.GetFileName(file)}");
+                    continue;
+                }
 
                 clips[key] = clip;
+                bool fromModel = file == character.ModelPath;
+                Debug.Log($"[MP] INFO CHARACTER_CLIP_USED key={key} path={Path.GetFileName(file)} model={fromModel}");
             }
 
             if (!clips.ContainsKey("idle") && !clips.ContainsKey("walk"))
@@ -605,6 +625,10 @@ namespace MPBlocks.Editor
 
                 if (IsIgnored(lower)) continue;
 
+                // A second copy of a locomotion clip (strafe vs strafe-walking) is a variant, not
+                // an action; firing it from a key would look like nothing happened.
+                if (ClassifyAnimation(stem).key != null) continue;
+
                 var name = ActionNameFor(stem);
                 if (string.IsNullOrEmpty(name) || !used.Add(name)) continue;
 
@@ -688,7 +712,7 @@ namespace MPBlocks.Editor
             // Explicit prefixes always win: "walk_shoot" is a shoot clip, "idle_sit" is idle.
             foreach (var slot in SlotPrefixes)
             {
-                if (name.StartsWith(slot + "_") || name.StartsWith(slot + " ") || name.StartsWith(slot + "-"))
+                if (name.StartsWith(slot + "_") || name.StartsWith(slot + "-"))
                 {
                     return (slot, 0);
                 }

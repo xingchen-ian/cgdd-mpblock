@@ -132,6 +132,10 @@ namespace MPBlocks.Gameplay
             {
                 playerCamera.enabled = true;
                 if (cameraOffset != Vector3.zero) playerCamera.transform.localPosition = cameraOffset;
+
+                // Two spawned players would otherwise leave two enabled listeners in the scene.
+                var listener = playerCamera.GetComponent<AudioListener>();
+                if (listener != null) listener.enabled = true;
             }
 
             MPLog.Info("RIGIDBODY_PLAYER_READY", ("label", label), ("clientId", OwnerClientId));
