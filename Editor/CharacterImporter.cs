@@ -532,6 +532,12 @@ namespace MPBlocks.Editor
             foreach (var pair in best) mapping.Add($"{pair.Key}={Path.GetFileNameWithoutExtension(pair.Value.Value)}");
             mapping.AddRange(actionMapping);
 
+            if (!clips.ContainsKey("idle"))
+            {
+                Debug.LogWarning($"[MP] WARN CHARACTER_CONTROLLER_INCOMPLETE name={character.Name} " +
+                                 "no idle clip was readable — re-run Import from Assets/Character once the FBX files have finished importing");
+            }
+
             Debug.Log($"[MP] INFO CHARACTER_CONTROLLER name={character.Name} " +
                       $"clips={string.Join("/", clips.Keys)} mapping=[{string.Join(", ", mapping)}]");
             return controller;
@@ -688,6 +694,18 @@ namespace MPBlocks.Editor
         }
 
         private static AnimationClip LoadFirstClip(string fbxPath)
+        {
+            var clip = FindFirstClip(fbxPath);
+            if (clip != null) return clip;
+
+            // The FBX may still be streaming in (a 28 MB Mixamo model takes a moment). Force a
+            // synchronous import rather than dropping the slot: a half-imported folder used to
+            // produce a controller whose Idle state had no motion.
+            AssetDatabase.ImportAsset(fbxPath, ImportAssetOptions.ForceSynchronousImport);
+            return FindFirstClip(fbxPath);
+        }
+
+        private static AnimationClip FindFirstClip(string fbxPath)
         {
             foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(fbxPath))
             {
